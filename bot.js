@@ -21,7 +21,7 @@ const bot = new TelegramBot(BOT_TOKEN, { polling: true });
 let explosionSentToday = false;
 let birthdayNotifiedToday = false;
 
-// ✅ МЕНЮ - ПРАВИЛЬНИЙ СИНТАКСИС
+// ✅ МЕНЮ - АБСОЛЮТНО ПРАВИЛЬНИЙ СИНТАКСИС
 const mainMenu = {
   inline_keyboard: [
     [{ text: '💥 Explosion!', callback_ 'explosion' }],
