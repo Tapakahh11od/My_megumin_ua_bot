@@ -27,10 +27,10 @@ let birthdayNotifiedToday = false;
 // ================= 📋 2. МЕНЮ (КНОПКИ) =================
 const mainMenu = {
   inline_keyboard: [
-    [{ text: '💥 Explosion!', callback_ 'explosion' }],
-    [{ text: '💱 Курс валют', callback_ 'currency' }],
-    [{ text: '⛽ Ціни на паливо', callback_ 'fuel' }],
-    [{ text: '🧙‍♀️ Про Мегумін', callback_ 'about' }]
+    [{ text: '💥 Explosion!', callback_data: 'explosion' }],
+    [{ text: '💱 Курс валют', callback_data: 'currency' }],
+    [{ text: '⛽ Ціни на паливо', callback_data: 'fuel' }],
+    [{ text: '🧙‍♀️ Про Мегумін', callback_data: 'about' }]
   ]
 };
 
