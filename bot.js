@@ -117,7 +117,7 @@ function getCurrency() {
           const eur = json.find(r => r.currencyCodeA === 978 && r.currencyCodeB === 980);
           let t = '💱 **Курс від Monobank**\n\n';
           if (usd) t += `🇺🇸 USD: 🟢 ${usd.rateBuy} / 🔴 ${usd.rateSell}\n`;
-          if (eur) t += `🇪 EUR: 🟢 ${eur.rateBuy} / 🔴 ${eur.rateSell}\n`;
+          if (eur) t += `🇪🇺 EUR: 🟢 ${eur.rateBuy} / 🔴 ${eur.rateSell}\n`;
           resolve(t + '\n🟢 купівля | 🔴 продаж');
         } catch { 
           resolve('❌ Помилка завантаження курсу.'); 
@@ -132,7 +132,6 @@ function getCurrency() {
 // ⛽ Ціни на паливо (ПРАЦЮЮЧА ВЕРСІЯ)
 function getFuelPrices() {
   return new Promise((resolve) => {
-    // Варіант 1: Головна сторінка Minfin з парсингом
     const options = {
       hostname: 'minfin.com.ua',
       path: '/api/currency/fuel/',
@@ -158,20 +157,16 @@ function getFuelPrices() {
         try {
           console.log('📦 Fuel API Raw Response:', data.substring(0, 500));
           
-          // Спроба розпарсити JSON
           const json = JSON.parse(data);
           
-          // Перевірка різних форматів відповіді
           let a92, a95, dt, gas;
           
-          // Формат 1: { A95: { sale: 50.5 }, ... }
           if (json.A95 || json.A92 || json.Diesel || json.Gas) {
             a95 = json.A95?.sale != null ? json.A95.sale.toFixed(2) : '—';
             a92 = json.A92?.sale != null ? json.A92.sale.toFixed(2) : '—';
             dt = json.Diesel?.sale != null ? json.Diesel.sale.toFixed(2) : '—';
             gas = json.Gas?.sale != null ? json.Gas.sale.toFixed(2) : '—';
           }
-          // Формат 2: { fuels: [ { name: 'А-95', price: 50.5 }, ... ] }
           else if (Array.isArray(json.fuels) || Array.isArray(json)) {
             const fuels = json.fuels || json;
             a95 = '—'; a92 = '—'; dt = '—'; gas = '—';
@@ -186,14 +181,12 @@ function getFuelPrices() {
               else if (name.includes('ГАЗ') || name.includes('GAS')) gas = price.toFixed(2);
             });
           }
-          // Формат 3: прямі значення
           else if (typeof json === 'object') {
             a95 = json.a95 || json.A95 || json['А-95'] || '—';
             a92 = json.a92 || json.A92 || json['А-92'] || '—';
             dt = json.dt || json.Diesel || json.DT || json['ДП'] || '—';
             gas = json.gas || json.Gas || json.GAS || json['ГАЗ'] || '—';
             
-            // Якщо це рядки, залишаємо як є, якщо числа - форматуємо
             if (typeof a95 === 'number') a95 = a95.toFixed(2);
             if (typeof a92 === 'number') a92 = a92.toFixed(2);
             if (typeof dt === 'number') dt = dt.toFixed(2);
@@ -215,7 +208,6 @@ function getFuelPrices() {
           console.error('❌ Fuel parse error:', err.message);
           console.error('📄 Raw response:', data);
           
-          //fallback - показати що є
           resolve('⛽ **Паливо**\n\nТимчасово недоступно. Спробуйте пізніше. 🔧\n\n_Можливо, API Minfin тимчасово не працює._');
         }
       });
