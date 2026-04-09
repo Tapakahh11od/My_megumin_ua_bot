@@ -6,7 +6,7 @@ let localConfig = {};
 try { localConfig = require('./config.json'); } catch (e) {}
 
 const BOT_TOKEN = process.env.BOT_TOKEN || localConfig.BOT_TOKEN;
-const ADMIN_CHAT_ID = process.env.ADMIN_CHAT_ID || localConfig.ADMIN_CHAT_ID;
+const ADMIN_CHAT_ID = Number(process.env.ADMIN_CHAT_ID || localConfig.ADMIN_CHAT_ID);
 
 let BIRTHDAYS = [];
 try { BIRTHDAYS = require('./birthdays.json'); } catch (e) {}
@@ -21,45 +21,47 @@ const bot = new TelegramBot(BOT_TOKEN, { polling: true });
 let explosionSentToday = false;
 let birthdayNotifiedToday = false;
 
-// ✅ МЕНЮ - ПРАВИЛЬНИЙ СИНТАКСИС
+// ✅ ВИПРАВЛЕНЕ МЕНЮ
 const mainMenu = {
   inline_keyboard: [
-    [{ text: '💥 Explosion!', callback_: 'explosion' }],
-    [{ text: '💱 Курс валют', callback_: 'currency' }],
-    [{ text: '⛽ Ціни на паливо', callback_: 'fuel' }],
-    [{ text: '🧙‍♀️ Про Мегумін', callback_: 'about' }]
+    [{ text: '💥 Explosion!', callback_data: 'explosion' }],
+    [{ text: '💱 Курс валют', callback_data: 'currency' }],
+    [{ text: '⛽ Ціни на паливо', callback_data: 'fuel' }],
+    [{ text: '🧙‍♀️ Про Мегумін', callback_data: 'about' }]
   ]
 };
 
+// START
 bot.onText(/\/start/, (msg) => {
-  bot.sendMessage(msg.chat.id, 
-    '🧙‍♀️ **Привіт! Я Мегумін!**\n\n' +
-    'Магістр вибухової магії вже тут!\n' +
-    'Натисни `/bot`, щоб побачити меню. 💥', 
-    { parse_mode: 'Markdown' }
+  bot.sendMessage(
+    msg.chat.id,
+    '🧙‍♀️ Привіт! Я Мегумін!\n\nМагістр вибухової магії вже тут!\nНатисни /bot, щоб побачити меню. 💥'
   );
 });
 
+// MENU
 bot.onText(/\/bot/, (msg) => {
-  bot.sendMessage(msg.chat.id, '📋 **Головне меню**\nОбери потрібну функцію:', { 
-    reply_markup: mainMenu, 
-    parse_mode: 'Markdown' 
+  bot.sendMessage(msg.chat.id, '📋 Головне меню\nОбери функцію:', {
+    reply_markup: mainMenu
   });
 });
 
+// GET CHAT ID
 bot.onText(/\/getid/, (msg) => {
   const chatId = msg.chat.id;
   const chatTitle = msg.chat.title || 'Особистий чат';
   const chatType = msg.chat.type;
-  
-  const text = `🆔 **Інформація про чат:**\n\n` +
-               `📛 Назва: \`${chatTitle}\`\n` +
-               `🔢 ID: \`${chatId}\`\n` +
-               `📎 Тип: \`${chatType}\``;
-  
-  bot.sendMessage(chatId, text, { parse_mode: 'Markdown' });
+
+  const text =
+    `🆔 Інформація про чат:\n\n` +
+    `📛 Назва: ${chatTitle}\n` +
+    `🔢 ID: ${chatId}\n` +
+    `📎 Тип: ${chatType}`;
+
+  bot.sendMessage(chatId, text);
 });
 
+// CALLBACK
 bot.on('callback_query', async (cb) => {
   const chatId = cb.message.chat.id;
   await bot.answerCallbackQuery(cb.id);
@@ -68,141 +70,173 @@ bot.on('callback_query', async (cb) => {
     case 'explosion':
       sendExplosion(chatId);
       break;
+
     case 'currency':
       bot.sendMessage(chatId, '⏳ Завантажую курс...');
-      getCurrency().then(t => bot.sendMessage(chatId, t, { parse_mode: 'Markdown' }));
+      getCurrency().then(t => bot.sendMessage(chatId, t));
       break;
+
     case 'fuel':
       bot.sendMessage(chatId, '⏳ Завантажую ціни на паливо...');
-      getFuelPrices().then(t => bot.sendMessage(chatId, t, { parse_mode: 'Markdown' }));
+      getFuelPrices().then(t => bot.sendMessage(chatId, t));
       break;
+
     case 'about':
-      const aboutText = '🧙‍♀️ **Про Мегумін**\n\n' +
-                        'Я — архіволшебниця з Коносуби!\n' +
-                        'Вмію тільки вибухову магію... ну і ще:\n\n' +
-                        '💥 Вибухи по кнопці та о 18:00\n' +
-                        '💱 Курси валют (Monobank)\n' +
-                        '⛽ Ціни на паливо (Minfin)\n' +
-                        '🎂 Автоматичні привітання з ДН\n' +
-                        '🆔 Дізнатися ID чату (команда /getid)\n\n' +
-                        '✨ _EXPLOSION!_';
-      bot.sendMessage(chatId, aboutText, { parse_mode: 'Markdown' });
+      bot.sendMessage(
+        chatId,
+        '🧙‍♀️ Про Мегумін\n\n' +
+        'Я — архіволшебниця з Коносуби!\n\n' +
+        '💥 Вибухи\n💱 Курси валют\n⛽ Паливо\n🎂 Дні народження\n\n' +
+        'EXPLOSION!'
+      );
       break;
   }
 });
 
+// EXPLOSION
 function sendExplosion(chatId) {
-  const text = '💥 **EXPLOSION!** 💥\n_Мегумін використала свою фірмову магію!_ 🔥';
-  const explosionGifId = 'CgACAgQAAxkBAAMCadep_WqfcQ14s78soH2lBvQ3wkMAAngGAAK8muRQ4pvZxf4pVQY7BA';
-  bot.sendAnimation(chatId, explosionGifId, { caption: text, parse_mode: 'Markdown' });
+  const text = '💥 EXPLOSION! 💥\nМегумін використала магію!';
+  const gif = 'CgACAgQAAxkBAAMCadep_WqfcQ14s78soH2lBvQ3wkMAAngGAAK8muRQ4pvZxf4pVQY7BA';
+
+  bot.sendAnimation(chatId, gif, { caption: text });
 }
 
+// CURRENCY
 function getCurrency() {
   return new Promise((resolve) => {
-    https.get('https://api.monobank.ua/bank/currency', { 
-      headers: { 'User-Agent': 'Megumin-Bot/1.0' }, 
-      timeout: 8000 
+    https.get('https://api.monobank.ua/bank/currency', {
+      headers: { 'User-Agent': 'Megumin-Bot' },
+      timeout: 8000
     }, (res) => {
+
       let data = '';
-      res.on('data', c => data += c);
+
+      res.on('data', chunk => data += chunk);
+
       res.on('end', () => {
         try {
           const json = JSON.parse(data);
+
           const usd = json.find(r => r.currencyCodeA === 840 && r.currencyCodeB === 980);
           const eur = json.find(r => r.currencyCodeA === 978 && r.currencyCodeB === 980);
-          let t = '💱 **Курс від Monobank**\n\n';
-          if (usd) t += `🇺🇸 USD: 🟢 ${usd.rateBuy} / 🔴 ${usd.rateSell}\n`;
-          if (eur) t += `🇪🇺 EUR: 🟢 ${eur.rateBuy} / 🔴 ${eur.rateSell}\n`;
-          resolve(t + '\n🟢 купівля | 🔴 продаж');
-        } catch { resolve('❌ Помилка завантаження курсу.'); }
+
+          const usdBuy = usd?.rateBuy ?? '—';
+          const usdSell = usd?.rateSell ?? '—';
+
+          const eurBuy = eur?.rateBuy ?? '—';
+          const eurSell = eur?.rateSell ?? '—';
+
+          const text =
+            `💱 Курс Monobank\n\n` +
+            `USD: ${usdBuy} / ${usdSell}\n` +
+            `EUR: ${eurBuy} / ${eurSell}`;
+
+          resolve(text);
+
+        } catch {
+          resolve('❌ Помилка курсу');
+        }
       });
-    }).on('error', () => resolve('❌ Помилка з\'єднання з курсом.'));
+
+    }).on('error', () => resolve('❌ Помилка з\'єднання'));
   });
 }
 
+// FUEL
 function getFuelPrices() {
   return new Promise((resolve) => {
-    const options = {
+
+    const req = https.request({
       hostname: 'minfin.com.ua',
       path: '/api/currency/fuel/',
       method: 'GET',
-      headers: {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
-        'Accept': 'application/json, text/javascript, */*; q=0.01',
-        'Accept-Language': 'uk-UA,uk;q=0.9,en-US;q=0.8,en;q=0.7',
-        'Referer': 'https://minfin.com.ua/currency/fuel/',
-        'X-Requested-With': 'XMLHttpRequest'
-      },
+      headers: { 'User-Agent': 'Mozilla/5.0' },
       timeout: 10000
-    };
+    }, (res) => {
 
-    const req = https.request(options, (res) => {
       let data = '';
       res.on('data', chunk => data += chunk);
+
       res.on('end', () => {
         try {
           const json = JSON.parse(data);
-          let a92, a95, dt, gas;
-          
-          if (json.A95 || json.A92 || json.Diesel || json.Gas) {
-            a95 = json.A95?.sale != null ? json.A95.sale.toFixed(2) : '—';
-            a92 = json.A92?.sale != null ? json.A92.sale.toFixed(2) : '—';
-            dt = json.Diesel?.sale != null ? json.Diesel.sale.toFixed(2) : '—';
-            gas = json.Gas?.sale != null ? json.Gas.sale.toFixed(2) : '—';
-          } else {
-            a95 = '—'; a92 = '—'; dt = '—'; gas = '—';
-          }
-          
-          const text = `⛽ **Паливо (середнє по Україні):**\n\n` +
-                       `🟢 А-92: **${a92}** грн\n` +
-                       `🔵 А-95: **${a95}** грн\n` +
-                       `🔴 ДП: **${dt}** грн\n` +
-                       `🟡 Газ: **${gas}** грн\n\n` +
-                       `📅 Оновлено: ${new Date().toLocaleDateString('uk-UA')}`;
-          resolve(text);
-        } catch { resolve('❌ Не вдалося завантажити ціни на паливо.'); }
+
+          const a95 = json.A95?.sale?.toFixed(2) ?? '—';
+          const a92 = json.A92?.sale?.toFixed(2) ?? '—';
+          const dt = json.Diesel?.sale?.toFixed(2) ?? '—';
+          const gas = json.Gas?.sale?.toFixed(2) ?? '—';
+
+          resolve(
+            `⛽ Паливо:\n\n` +
+            `А-92: ${a92}\n` +
+            `А-95: ${a95}\n` +
+            `ДП: ${dt}\n` +
+            `Газ: ${gas}`
+          );
+
+        } catch {
+          resolve('❌ Помилка палива');
+        }
       });
+
     });
-    req.on('error', () => resolve('❌ Помилка з\'єднання.'));
-    req.on('timeout', () => { req.destroy(); resolve('⏱️ Таймаут.'); });
+
+    req.on('error', () => resolve('❌ Помилка з\'єднання'));
+    req.on('timeout', () => {
+      req.destroy();
+      resolve('⏱️ Таймаут');
+    });
+
     req.end();
   });
 }
 
+// BIRTHDAYS
 function getTodayBirthdays() {
-  const nowKyiv = new Date().toLocaleString('uk-UA', { 
-    timeZone: 'Europe/Kyiv', day: '2-digit', month: '2-digit' 
-  });
-  const [day, month] = nowKyiv.split('.');
+  const now = new Date().toLocaleString('en-US', { timeZone: 'Europe/Kyiv' });
+  const date = new Date(now);
+
+  const day = String(date.getDate()).padStart(2, '0');
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+
   return BIRTHDAYS.filter(p => p.date === `${day}.${month}`);
 }
 
+// TIMER
 setInterval(() => {
-  const nowKyiv = new Date().toLocaleString('uk-UA', { timeZone: 'Europe/Kyiv' });
-  const [, timeStr] = nowKyiv.split(', ');
-  const currentTime = timeStr.substring(0, 5);
-  
-  if (currentTime === "18:00" && !explosionSentToday && ADMIN_CHAT_ID) {
+  const now = new Date().toLocaleString('en-US', { timeZone: 'Europe/Kyiv' });
+  const date = new Date(now);
+
+  const time = `${String(date.getHours()).padStart(2, '0')}:${String(date.getMinutes()).padStart(2, '0')}`;
+
+  if (time === "18:00" && !explosionSentToday && ADMIN_CHAT_ID) {
     sendExplosion(ADMIN_CHAT_ID);
     explosionSentToday = true;
   }
-  if (currentTime === "09:00" && !birthdayNotifiedToday && ADMIN_CHAT_ID) {
+
+  if (time === "09:00" && !birthdayNotifiedToday && ADMIN_CHAT_ID) {
     const today = getTodayBirthdays();
+
     if (today.length > 0) {
       const names = today.map(p => p.name).join(', ');
-      bot.sendMessage(ADMIN_CHAT_ID, `🎉 **З Днем Народження!** 🎂\n✨ ${names}\n💥 EXPLOSION of happiness!`, { parse_mode: 'Markdown' });
+      bot.sendMessage(ADMIN_CHAT_ID, `🎉 З Днем Народження!\n${names}`);
       birthdayNotifiedToday = true;
     }
   }
-  if (currentTime === "00:01") {
+
+  if (time === "00:01") {
     explosionSentToday = false;
     birthdayNotifiedToday = false;
   }
+
 }, 60000);
+
+// SERVER (ВАЖЛИВО ДЛЯ RENDER)
+const PORT = process.env.PORT || 3000;
 
 http.createServer((_, res) => {
   res.writeHead(200, { 'Content-Type': 'text/plain' });
-  res.end('✅ Megumin Bot is alive! 💥');
-}).listen(3000, () => console.log('🌐 Server on port 3000'));
+  res.end('✅ Bot is alive');
+}).listen(PORT, () => console.log(`🌐 Server running on ${PORT}`));
 
 console.log('✅ Мегумін запущена! 💥');
