@@ -104,6 +104,7 @@ function sendExplosion(chatId) {
 // 💱 Курс валют
 function getCurrency() {
   return new Promise((resolve) => {
+    // ✅ ВИПРАВЛЕНО: видалено пробіли в кінці URL
     https.get('https://api.monobank.ua/bank/currency', { 
       headers: { 'User-Agent': 'Megumin-Bot/1.0' }, 
       timeout: 8000 
@@ -129,7 +130,7 @@ function getCurrency() {
   });
 }
 
-// ⛽ Ціни на паливо (ПРАЦЮЮЧА ВЕРСІЯ)
+// ⛽ Ціни на паливо
 function getFuelPrices() {
   return new Promise((resolve) => {
     const options = {
@@ -140,6 +141,7 @@ function getFuelPrices() {
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
         'Accept': 'application/json, text/javascript, */*; q=0.01',
         'Accept-Language': 'uk-UA,uk;q=0.9,en-US;q=0.8,en;q=0.7',
+        // ✅ ВИПРАВЛЕНО: видалено пробіли в кінці URL
         'Referer': 'https://minfin.com.ua/currency/fuel/',
         'X-Requested-With': 'XMLHttpRequest'
       },
