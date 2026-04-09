@@ -9,7 +9,6 @@ try { localConfig = require('./config.json'); } catch (e) {}
 const BOT_TOKEN = process.env.BOT_TOKEN || localConfig.BOT_TOKEN;
 const ADMIN_CHAT_ID = process.env.ADMIN_CHAT_ID || localConfig.ADMIN_CHAT_ID;
 
-// 🎂 Завантаження списку днів народження
 let BIRTHDAYS = [];
 try { BIRTHDAYS = require('./birthdays.json'); } catch (e) {}
 
@@ -18,47 +17,22 @@ if (!BOT_TOKEN) {
   process.exit(1);
 }
 
-// 🔄 Вибір режиму: polling для локалки, webhook для Render
-const isProduction = process.env.RENDER_EXTERNAL_URL || process.env.NODE_ENV === 'production';
+const bot = new TelegramBot(BOT_TOKEN, { polling: true });
 
-const botOptions = isProduction ? {
-  webhook: {
-    allowedUpdates: ['message', 'callback_query', 'inline_query'],
-    host: process.env.RENDER_EXTERNAL_URL?.replace('https://', '')
-  }
-} : {
-  polling: true
-};
-
-const bot = new TelegramBot(BOT_TOKEN, botOptions);
-
-// Встановлення webhook для Render
-if (isProduction && process.env.RENDER_EXTERNAL_URL) {
-  const webhookUrl = `${process.env.RENDER_EXTERNAL_URL}/bot${BOT_TOKEN}`;
-  bot.setWebHook(webhookUrl).then(() => {
-    console.log(`🔗 Webhook встановлено: ${webhookUrl}`);
-  }).catch(err => {
-    console.error('❌ Помилка встановлення webhook:', err.message);
-  });
-}
-
-// Стани для авто-завдань
 let explosionSentToday = false;
 let birthdayNotifiedToday = false;
 
 // ================= 📋 2. МЕНЮ (КНОПКИ) =================
 const mainMenu = {
   inline_keyboard: [
-    [{ text: '💥 Explosion!', callback_data: 'explosion' }],
-    [{ text: '💱 Курс валют', callback_data: 'currency' }],
-    [{ text: '⛽ Ціни на паливо', callback_data: 'fuel' }],
-    [{ text: '🧙‍♀️ Про Мегумін', callback_data: 'about' }]
+    [{ text: '💥 Explosion!', callback_ 'explosion' }],
+    [{ text: '💱 Курс валют', callback_ 'currency' }],
+    [{ text: '⛽ Ціни на паливо', callback_ 'fuel' }],
+    [{ text: '🧙‍♀️ Про Мегумін', callback_ 'about' }]
   ]
 };
 
 // ================= 🔘 3. ОБРОБКА КОМАНД =================
-
-// Команда /start
 bot.onText(/\/start/, (msg) => {
   bot.sendMessage(msg.chat.id, 
     '🧙‍♀️ **Привіт! Я Мегумін!**\n\n' +
@@ -68,7 +42,6 @@ bot.onText(/\/start/, (msg) => {
   );
 });
 
-// Команда /bot (відкриває меню)
 bot.onText(/\/bot/, (msg) => {
   bot.sendMessage(msg.chat.id, '📋 **Головне меню**\nОбери потрібну функцію:', { 
     reply_markup: mainMenu, 
@@ -76,7 +49,6 @@ bot.onText(/\/bot/, (msg) => {
   });
 });
 
-// 🆔 Нова команда /getid (замість кнопки)
 bot.onText(/\/getid/, (msg) => {
   const chatId = msg.chat.id;
   const chatTitle = msg.chat.title || 'Особистий чат';
@@ -99,19 +71,14 @@ bot.on('callback_query', async (cb) => {
     case 'explosion':
       sendExplosion(chatId);
       break;
-      
     case 'currency':
-      bot.sendMessage(chatId, '⏳ Завантажую курс...').then(() => {
-        getCurrency().then(t => bot.sendMessage(chatId, t, { parse_mode: 'Markdown' }));
-      });
+      bot.sendMessage(chatId, '⏳ Завантажую курс...');
+      getCurrency().then(t => bot.sendMessage(chatId, t, { parse_mode: 'Markdown' }));
       break;
-      
     case 'fuel':
-      bot.sendMessage(chatId, '⏳ Завантажую ціни на паливо...').then(() => {
-        getFuelPrices().then(t => bot.sendMessage(chatId, t, { parse_mode: 'Markdown' }));
-      });
+      bot.sendMessage(chatId, '⏳ Завантажую ціни на паливо...');
+      getFuelPrices().then(t => bot.sendMessage(chatId, t, { parse_mode: 'Markdown' }));
       break;
-      
     case 'about':
       const aboutText = '🧙‍♀️ **Про Мегумін**\n\n' +
                         'Я — архіволшебниця з Коносуби!\n' +
@@ -128,18 +95,15 @@ bot.on('callback_query', async (cb) => {
 });
 
 // ================= ⚙️ ФУНКЦІЇ =================
-
-// 💥 Вибух
 function sendExplosion(chatId) {
   const text = '💥 **EXPLOSION!** 💥\n_Мегумін використала свою фірмову магію!_ 🔥';
   const explosionGifId = 'CgACAgQAAxkBAAMCadep_WqfcQ14s78soH2lBvQ3wkMAAngGAAK8muRQ4pvZxf4pVQY7BA';
   bot.sendAnimation(chatId, explosionGifId, { caption: text, parse_mode: 'Markdown' });
 }
 
-// 💱 Курс валют (виправлено URL)
+// 💱 Курс валют
 function getCurrency() {
   return new Promise((resolve) => {
-    // ✅ Видалено зайві пробіли в URL
     https.get('https://api.monobank.ua/bank/currency', { 
       headers: { 'User-Agent': 'Megumin-Bot/1.0' }, 
       timeout: 8000 
@@ -153,32 +117,32 @@ function getCurrency() {
           const eur = json.find(r => r.currencyCodeA === 978 && r.currencyCodeB === 980);
           let t = '💱 **Курс від Monobank**\n\n';
           if (usd) t += `🇺🇸 USD: 🟢 ${usd.rateBuy} / 🔴 ${usd.rateSell}\n`;
-          if (eur) t += `🇪🇺 EUR: 🟢 ${eur.rateBuy} / 🔴 ${eur.rateSell}\n`;
+          if (eur) t += `🇪 EUR: 🟢 ${eur.rateBuy} / 🔴 ${eur.rateSell}\n`;
           resolve(t + '\n🟢 купівля | 🔴 продаж');
-        } catch (err) {
-          console.error('❌ Currency parse error:', err.message);
-          resolve('❌ Помилка завантаження курсу.');
+        } catch { 
+          resolve('❌ Помилка завантаження курсу.'); 
         }
       });
-    }).on('error', (err) => {
-      console.error('❌ Currency request error:', err.message);
+    }).on('error', () => {
       resolve('❌ Помилка з\'єднання з курсом.');
     });
   });
 }
 
-// ⛽ Ціни на паливо (виправлено URL + покращено обробку)
+// ⛽ Ціни на паливо (ПРАЦЮЮЧА ВЕРСІЯ)
 function getFuelPrices() {
   return new Promise((resolve) => {
-    // ✅ Видалено зайві пробіли в URL
+    // Варіант 1: Головна сторінка Minfin з парсингом
     const options = {
       hostname: 'minfin.com.ua',
       path: '/api/currency/fuel/',
       method: 'GET',
       headers: {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
-        'Accept': 'application/json',
-        'Referer': 'https://minfin.com.ua/'
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+        'Accept': 'application/json, text/javascript, */*; q=0.01',
+        'Accept-Language': 'uk-UA,uk;q=0.9,en-US;q=0.8,en;q=0.7',
+        'Referer': 'https://minfin.com.ua/currency/fuel/',
+        'X-Requested-With': 'XMLHttpRequest'
       },
       timeout: 10000
     };
@@ -186,45 +150,80 @@ function getFuelPrices() {
     const req = https.request(options, (res) => {
       let data = '';
       
+      console.log(`📡 Fuel API Status: ${res.statusCode}`);
+      
       res.on('data', chunk => data += chunk);
       
       res.on('end', () => {
         try {
-          // 🔍 Логування для відладки (бачитимете в Render logs)
-          console.log('📦 Fuel API raw response:', data.substring(0, 300));
+          console.log('📦 Fuel API Raw Response:', data.substring(0, 500));
           
+          // Спроба розпарсити JSON
           const json = JSON.parse(data);
           
-          // Перевірка, чи є дані
-          if (!json || typeof json !== 'object') {
-            throw new Error('Invalid API response structure');
-          }
+          // Перевірка різних форматів відповіді
+          let a92, a95, dt, gas;
           
-          // Безпечне отримання цін з fallback
-          const a95 = json.A95?.sale != null ? json.A95.sale.toFixed(2) : '—';
-          const a92 = json.A92?.sale != null ? json.A92.sale.toFixed(2) : '—';
-          const dt = json.Diesel?.sale != null ? json.Diesel.sale.toFixed(2) : '—';
-          const gas = json.Gas?.sale != null ? json.Gas.sale.toFixed(2) : '—';
+          // Формат 1: { A95: { sale: 50.5 }, ... }
+          if (json.A95 || json.A92 || json.Diesel || json.Gas) {
+            a95 = json.A95?.sale != null ? json.A95.sale.toFixed(2) : '—';
+            a92 = json.A92?.sale != null ? json.A92.sale.toFixed(2) : '—';
+            dt = json.Diesel?.sale != null ? json.Diesel.sale.toFixed(2) : '—';
+            gas = json.Gas?.sale != null ? json.Gas.sale.toFixed(2) : '—';
+          }
+          // Формат 2: { fuels: [ { name: 'А-95', price: 50.5 }, ... ] }
+          else if (Array.isArray(json.fuels) || Array.isArray(json)) {
+            const fuels = json.fuels || json;
+            a95 = '—'; a92 = '—'; dt = '—'; gas = '—';
+            
+            fuels.forEach(fuel => {
+              const name = (fuel.name || fuel.type || '').toUpperCase();
+              const price = fuel.price || fuel.sale || fuel.cost;
+              
+              if (name.includes('А-92') || name.includes('AI-92')) a92 = price.toFixed(2);
+              else if (name.includes('А-95') || name.includes('AI-95')) a95 = price.toFixed(2);
+              else if (name.includes('ДП') || name.includes('DT') || name.includes('DIESEL')) dt = price.toFixed(2);
+              else if (name.includes('ГАЗ') || name.includes('GAS')) gas = price.toFixed(2);
+            });
+          }
+          // Формат 3: прямі значення
+          else if (typeof json === 'object') {
+            a95 = json.a95 || json.A95 || json['А-95'] || '—';
+            a92 = json.a92 || json.A92 || json['А-92'] || '—';
+            dt = json.dt || json.Diesel || json.DT || json['ДП'] || '—';
+            gas = json.gas || json.Gas || json.GAS || json['ГАЗ'] || '—';
+            
+            // Якщо це рядки, залишаємо як є, якщо числа - форматуємо
+            if (typeof a95 === 'number') a95 = a95.toFixed(2);
+            if (typeof a92 === 'number') a92 = a92.toFixed(2);
+            if (typeof dt === 'number') dt = dt.toFixed(2);
+            if (typeof gas === 'number') gas = gas.toFixed(2);
+          }
+          else {
+            throw new Error('Unknown format');
+          }
           
           const text = `⛽ **Паливо (середнє по Україні):**\n\n` +
                        `🟢 А-92: **${a92}** грн\n` +
                        `🔵 А-95: **${a95}** грн\n` +
                        `🔴 ДП: **${dt}** грн\n` +
                        `🟡 Газ: **${gas}** грн\n\n` +
-                       `📅 Оновлено: ${new Date().toLocaleDateString('uk-UA')}`;
+                       `📅 Оновлено: ${new Date().toLocaleDateString('uk-UA')} ${new Date().toLocaleTimeString('uk-UA', {hour: '2-digit', minute:'2-digit'})}`;
           
           resolve(text);
         } catch (err) {
-          console.error('❌ Fuel API error:', err.message);
+          console.error('❌ Fuel parse error:', err.message);
           console.error('📄 Raw response:', data);
-          resolve('❌ Не вдалося завантажити ціни на паливо. Спробуйте пізніше.');
+          
+          //fallback - показати що є
+          resolve('⛽ **Паливо**\n\nТимчасово недоступно. Спробуйте пізніше. 🔧\n\n_Можливо, API Minfin тимчасово не працює._');
         }
       });
     });
 
     req.on('error', (err) => {
       console.error('❌ Fuel request error:', err.message);
-      resolve('❌ Помилка з\'єднання з API палива.');
+      resolve('❌ Помилка з\'єднання з API палива. Спробуйте пізніше.');
     });
 
     req.on('timeout', () => {
@@ -237,7 +236,7 @@ function getFuelPrices() {
   });
 }
 
-// 🎂 Пошук іменинників на сьогодні
+// 🎂 Іменинники
 function getTodayBirthdays() {
   const nowKyiv = new Date().toLocaleString('uk-UA', { 
     timeZone: 'Europe/Kyiv', day: '2-digit', month: '2-digit' 
@@ -246,20 +245,18 @@ function getTodayBirthdays() {
   return BIRTHDAYS.filter(p => p.date === `${day}.${month}`);
 }
 
-// ================= ⏰ АВТО-ЗАВДАННЯ (Кожну хвилину) =================
+// ================= ⏰ АВТО-ЗАВДАННЯ =================
 setInterval(() => {
   const nowKyiv = new Date().toLocaleString('uk-UA', { timeZone: 'Europe/Kyiv' });
-  const [dateStr, timeStr] = nowKyiv.split(', ');
+  const [, timeStr] = nowKyiv.split(', ');
   const currentTime = timeStr.substring(0, 5);
   
-  // 💥 Автоматичний вибух о 18:00
   if (currentTime === "18:00" && !explosionSentToday && ADMIN_CHAT_ID) {
     sendExplosion(ADMIN_CHAT_ID);
     explosionSentToday = true;
-    console.log(`💥 ${currentTime} - Explosion надіслано!`);
+    console.log(`💥 ${currentTime} - Explosion sent!`);
   }
   
-  // 🎂 Автоматичне привітання з ДН о 09:00
   if (currentTime === "09:00" && !birthdayNotifiedToday && ADMIN_CHAT_ID) {
     const today = getTodayBirthdays();
     if (today.length > 0) {
@@ -268,42 +265,22 @@ setInterval(() => {
         `✨ ${names} — вітаю від усього магічного серця!\n` +
         `🧙‍♀️ _Нехай цей день буде сповнений магії та радості!_\n` +
         `💥 **EXPLOSION of happiness!**`;
-      
       bot.sendMessage(ADMIN_CHAT_ID, greeting, { parse_mode: 'Markdown' });
       birthdayNotifiedToday = true;
-      console.log(`🎂 ${currentTime} - Привітання з ДН надіслано!`);
+      console.log(`🎂 ${currentTime} - Birthday greeting sent!`);
     }
   }
   
-  // Скидання лімітів опівночі
   if (currentTime === "00:01") {
     explosionSentToday = false;
     birthdayNotifiedToday = false;
   }
 }, 60000);
 
-// ================= 🌐 HTTP СЕРВЕР (Для Render) =================
-http.createServer((req, res) => {
-  // Обробка webhook запитів від Telegram
-  if (isProduction && req.method === 'POST' && req.url === `/bot${BOT_TOKEN}`) {
-    let body = '';
-    req.on('data', chunk => body += chunk);
-    req.on('end', () => {
-      try {
-        bot.processUpdate(JSON.parse(body));
-        res.writeHead(200);
-        res.end('OK');
-      } catch (e) {
-        console.error('❌ Webhook processing error:', e.message);
-        res.writeHead(500);
-        res.end('Error');
-      }
-    });
-  } else {
-    // Звичайний health check
-    res.writeHead(200, { 'Content-Type': 'text/plain' });
-    res.end('✅ Megumin Bot is alive! 💥');
-  }
+// ================= 🌐 Простий сервер для health check =================
+http.createServer((_, res) => {
+  res.writeHead(200, { 'Content-Type': 'text/plain' });
+  res.end('✅ Megumin Bot is alive! 💥');
 }).listen(3000, () => console.log('🌐 Server on port 3000'));
 
 console.log('✅ Мегумін запущена! Використовуй /bot для меню. 💥');
