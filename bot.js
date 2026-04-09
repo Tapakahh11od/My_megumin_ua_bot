@@ -18,7 +18,29 @@ if (!BOT_TOKEN) {
   process.exit(1);
 }
 
-const bot = new TelegramBot(BOT_TOKEN, { polling: true });
+// 🔄 Вибір режиму: polling для локалки, webhook для Render
+const isProduction = process.env.RENDER_EXTERNAL_URL || process.env.NODE_ENV === 'production';
+
+const botOptions = isProduction ? {
+  webhook: {
+    allowedUpdates: ['message', 'callback_query', 'inline_query'],
+    host: process.env.RENDER_EXTERNAL_URL?.replace('https://', '')
+  }
+} : {
+  polling: true
+};
+
+const bot = new TelegramBot(BOT_TOKEN, botOptions);
+
+// Встановлення webhook для Render
+if (isProduction && process.env.RENDER_EXTERNAL_URL) {
+  const webhookUrl = `${process.env.RENDER_EXTERNAL_URL}/bot${BOT_TOKEN}`;
+  bot.setWebHook(webhookUrl).then(() => {
+    console.log(`🔗 Webhook встановлено: ${webhookUrl}`);
+  }).catch(err => {
+    console.error('❌ Помилка встановлення webhook:', err.message);
+  });
+}
 
 // Стани для авто-завдань
 let explosionSentToday = false;
@@ -114,11 +136,13 @@ function sendExplosion(chatId) {
   bot.sendAnimation(chatId, explosionGifId, { caption: text, parse_mode: 'Markdown' });
 }
 
-// 💱 Курс валют
+// 💱 Курс валют (виправлено URL)
 function getCurrency() {
   return new Promise((resolve) => {
+    // ✅ Видалено зайві пробіли в URL
     https.get('https://api.monobank.ua/bank/currency', { 
-      headers: { 'User-Agent': 'Megumin-Bot' }, timeout: 5000 
+      headers: { 'User-Agent': 'Megumin-Bot/1.0' }, 
+      timeout: 8000 
     }, (res) => {
       let data = '';
       res.on('data', c => data += c);
@@ -131,28 +155,56 @@ function getCurrency() {
           if (usd) t += `🇺🇸 USD: 🟢 ${usd.rateBuy} / 🔴 ${usd.rateSell}\n`;
           if (eur) t += `🇪🇺 EUR: 🟢 ${eur.rateBuy} / 🔴 ${eur.rateSell}\n`;
           resolve(t + '\n🟢 купівля | 🔴 продаж');
-        } catch { resolve('❌ Помилка завантаження курсу.'); }
+        } catch (err) {
+          console.error('❌ Currency parse error:', err.message);
+          resolve('❌ Помилка завантаження курсу.');
+        }
       });
-    }).on('error', () => resolve('❌ Помилка завантаження курсу.'));
+    }).on('error', (err) => {
+      console.error('❌ Currency request error:', err.message);
+      resolve('❌ Помилка з\'єднання з курсом.');
+    });
   });
 }
 
-// ⛽ Ціни на паливо
+// ⛽ Ціни на паливо (виправлено URL + покращено обробку)
 function getFuelPrices() {
   return new Promise((resolve) => {
-    https.get('https://minfin.com.ua/api/currency/fuel/', { 
-      headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)' }, 
-      timeout: 5000 
-    }, (res) => {
+    // ✅ Видалено зайві пробіли в URL
+    const options = {
+      hostname: 'minfin.com.ua',
+      path: '/api/currency/fuel/',
+      method: 'GET',
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+        'Accept': 'application/json',
+        'Referer': 'https://minfin.com.ua/'
+      },
+      timeout: 10000
+    };
+
+    const req = https.request(options, (res) => {
       let data = '';
-      res.on('data', c => data += c);
+      
+      res.on('data', chunk => data += chunk);
+      
       res.on('end', () => {
         try {
+          // 🔍 Логування для відладки (бачитимете в Render logs)
+          console.log('📦 Fuel API raw response:', data.substring(0, 300));
+          
           const json = JSON.parse(data);
-          const a95 = json.A95 ? json.A95.sale.toFixed(2) : '—';
-          const a92 = json.A92 ? json.A92.sale.toFixed(2) : '—';
-          const dt = json.Diesel ? json.Diesel.sale.toFixed(2) : '—';
-          const gas = json.Gas ? json.Gas.sale.toFixed(2) : '—';
+          
+          // Перевірка, чи є дані
+          if (!json || typeof json !== 'object') {
+            throw new Error('Invalid API response structure');
+          }
+          
+          // Безпечне отримання цін з fallback
+          const a95 = json.A95?.sale != null ? json.A95.sale.toFixed(2) : '—';
+          const a92 = json.A92?.sale != null ? json.A92.sale.toFixed(2) : '—';
+          const dt = json.Diesel?.sale != null ? json.Diesel.sale.toFixed(2) : '—';
+          const gas = json.Gas?.sale != null ? json.Gas.sale.toFixed(2) : '—';
           
           const text = `⛽ **Паливо (середнє по Україні):**\n\n` +
                        `🟢 А-92: **${a92}** грн\n` +
@@ -160,10 +212,28 @@ function getFuelPrices() {
                        `🔴 ДП: **${dt}** грн\n` +
                        `🟡 Газ: **${gas}** грн\n\n` +
                        `📅 Оновлено: ${new Date().toLocaleDateString('uk-UA')}`;
+          
           resolve(text);
-        } catch { resolve('❌ Не вдалося завантажити ціни на паливо.'); }
+        } catch (err) {
+          console.error('❌ Fuel API error:', err.message);
+          console.error('📄 Raw response:', data);
+          resolve('❌ Не вдалося завантажити ціни на паливо. Спробуйте пізніше.');
+        }
       });
-    }).on('error', () => resolve('❌ Помилка з\'єднання.'));
+    });
+
+    req.on('error', (err) => {
+      console.error('❌ Fuel request error:', err.message);
+      resolve('❌ Помилка з\'єднання з API палива.');
+    });
+
+    req.on('timeout', () => {
+      req.destroy();
+      console.error('⏱️ Fuel API timeout');
+      resolve('⏱️ Перевищено час очікування. Спробуйте пізніше.');
+    });
+
+    req.end();
   });
 }
 
@@ -213,9 +283,27 @@ setInterval(() => {
 }, 60000);
 
 // ================= 🌐 HTTP СЕРВЕР (Для Render) =================
-http.createServer((_, res) => {
-  res.writeHead(200, { 'Content-Type': 'text/plain' });
-  res.end('✅ Megumin Bot is alive! 💥');
+http.createServer((req, res) => {
+  // Обробка webhook запитів від Telegram
+  if (isProduction && req.method === 'POST' && req.url === `/bot${BOT_TOKEN}`) {
+    let body = '';
+    req.on('data', chunk => body += chunk);
+    req.on('end', () => {
+      try {
+        bot.processUpdate(JSON.parse(body));
+        res.writeHead(200);
+        res.end('OK');
+      } catch (e) {
+        console.error('❌ Webhook processing error:', e.message);
+        res.writeHead(500);
+        res.end('Error');
+      }
+    });
+  } else {
+    // Звичайний health check
+    res.writeHead(200, { 'Content-Type': 'text/plain' });
+    res.end('✅ Megumin Bot is alive! 💥');
+  }
 }).listen(3000, () => console.log('🌐 Server on port 3000'));
 
 console.log('✅ Мегумін запущена! Використовуй /bot для меню. 💥');
