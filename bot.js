@@ -24,10 +24,10 @@ let birthdayNotifiedToday = false;
 // ✅ МЕНЮ - ПРАВИЛЬНИЙ СИНТАКСИС
 const mainMenu = {
   inline_keyboard: [
-    [{ text: '💥 Explosion!', callback_ 'explosion' }],
-    [{ text: '💱 Курс валют', callback_ 'currency' }],
-    [{ text: '⛽ Ціни на паливо', callback_ 'fuel' }],
-    [{ text: '🧙‍♀️ Про Мегумін', callback_ 'about' }]
+    [{ text: '💥 Explosion!', callback_:'explosion' }],
+    [{ text: '💱 Курс валют', callback_:'currency' }],
+    [{ text: '⛽ Ціни на паливо', callback_:'fuel' }],
+    [{ text: '🧙‍♀️ Про Мегумін', callback_:'about' }]
   ]
 };
 
