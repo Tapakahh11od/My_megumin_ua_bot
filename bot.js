@@ -95,10 +95,9 @@ function getCurrency() {
   });
 }
 
-// ⛽ ЦІНИ НА ПАЛИВО
+// ⛽ ЦІНИ НА ПАЛИВО (Виправлена версія)
 function getFuelPrices() {
   return new Promise((resolve) => {
-    // Використовуємо стабільне джерело
     https.get('https://opencours.com.ua/api/fuel', { 
       headers: { 'User-Agent': 'Mozilla/5.0' },
       timeout: 8000 
@@ -110,8 +109,6 @@ function getFuelPrices() {
         try {
           const json = JSON.parse(data);
           
-          // Перевіряємо структуру відповіді (може відрізнятися залежно від API)
-          // Тут приклад для загального формату, можливо знадобиться адаптація
           if (json && json.fuel) {
              const a95 = json.fuel.find(f => f.name === 'А-95')?.price || '—';
              const a92 = json.fuel.find(f => f.name === 'А-92')?.price || '—';
@@ -120,7 +117,6 @@ function getFuelPrices() {
              
              resolve(`⛽ Паливо (середнє по Україні):\n\nА-92: ${a92} ₴\nА-95: ${a95} ₴\nДП: ${dt} ₴\nГаз: ${gas} ₴`);
           } else {
-            // Фолбек, якщо формат інший
             resolve('⛽ Паливо:\n⚠️ Тимчасово недоступно або змінено формат даних.');
           }
         } catch (e) {
@@ -130,7 +126,8 @@ function getFuelPrices() {
       });
     }).on('error', (err) => {
       console.error('❌ Fuel connection error:', err.message);
-      resolve('❌ Не вдалося з'єднатися з джерелом палива');
+      // 👇 ВИПРАВЛЕНО: екранований апостроф
+      resolve('❌ Не вдалося з\'єднатися з джерелом палива');
     }).on('timeout', () => {
       resolve('⏱️ Тайм-аут запиту палива');
     });
