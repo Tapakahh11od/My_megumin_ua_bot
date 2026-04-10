@@ -25,14 +25,16 @@ const bot = new TelegramBot(BOT_TOKEN, { polling: true });
 // 📊 Стани
 let explosionSentToday = false;
 let birthdayNotifiedToday = false;
+let waitingForMedia = {}; // Хто чекає на медіа після кнопки "Отримати File ID"
 
 // ================= 📋 ГОЛОВНЕ МЕНЮ =================
 const mainMenu = {
   inline_keyboard: [
-    [{ text: '💥 Explosion!', callback_data: 'explosion' }],
-    [{ text: '💱 Курс валют', callback_data: 'currency' }],
-    [{ text: '🎮 Dota 2 статистика', callback_data: 'dota_menu' }],
-    [{ text: '🧙‍♀️ Про Мегумін', callback_data: 'about' }]
+    [{ text: '💥 Explosion!', callback_ 'explosion' }],
+    [{ text: '💱 Курс валют', callback_ 'currency' }],
+    [{ text: '🎮 Dota 2 статистика', callback_ 'dota_menu' }],
+    [{ text: '🧙‍♀️ Про Мегумін', callback_ 'about' }],
+    [{ text: '🆔 Отримати File ID', callback_ 'get_file_id' }] // 🔥 НОВА КНОПКА
   ]
 };
 
@@ -72,15 +74,62 @@ bot.onText(/\/getid/, (msg) => {
   bot.sendMessage(msg.chat.id, text);
 });
 
-// ================= 🆔 AUTO-REPLY FILE_ID =================
+// ================= 🆔 ОБРОБКА МЕДІА (тільки після кнопки) =================
 bot.on('message', (msg) => {
-  if (msg.text && msg.text.startsWith('/')) return;
+  const chatId = msg.chat.id;
+  
+  // Якщо не чекаємо на медіа від цього чату — ігноруємо
+  if (!waitingForMedia[chatId]) return;
+  
+  // Скидаємо стан
+  delete waitingForMedia[chatId];
+  
+  // GIF
   if (msg.animation) {
-    bot.sendMessage(msg.chat.id, `🎬 **File ID:**\n\`${msg.animation.file_id}\``, { parse_mode: 'Markdown' });
+    const file = msg.animation;
+    bot.sendMessage(chatId, 
+      `🎬 **File ID GIF:**\n\`${file.file_id}\`\n\n` +
+      `📛 Назва: ${file.file_name || '—'}\n` +
+      `📊 Розмір: ${file.file_size} байт`, 
+      { parse_mode: 'Markdown' }
+    );
+    return;
   }
-  if (msg.photo?.length) {
-    bot.sendMessage(msg.chat.id, `📷 **File ID:**\n\`${msg.photo[msg.photo.length-1].file_id}\``, { parse_mode: 'Markdown' });
+  
+  // Фото
+  if (msg.photo && msg.photo.length > 0) {
+    const file = msg.photo[msg.photo.length - 1];
+    bot.sendMessage(chatId, 
+      `📷 **File ID фото:**\n\`${file.file_id}\`\n\n` +
+      `📊 Розмір: ${file.file_size} байт`, 
+      { parse_mode: 'Markdown' }
+    );
+    return;
   }
+  
+  // Відео
+  if (msg.video) {
+    const file = msg.video;
+    bot.sendMessage(chatId, 
+      `🎥 **File ID відео:**\n\`${file.file_id}\`\n\n` +
+      `📛 Назва: ${file.file_name || '—'}\n` +
+      `📊 Розмір: ${file.file_size} байт`, 
+      { parse_mode: 'Markdown' }
+    );
+    return;
+  }
+  
+  // Стикери
+  if (msg.sticker) {
+    bot.sendMessage(chatId, 
+      `✨ **File ID стікера:**\n\`${msg.sticker.file_id}\``, 
+      { parse_mode: 'Markdown' }
+    );
+    return;
+  }
+  
+  // Якщо не медіа
+  bot.sendMessage(chatId, '❌ Це не медіа. Натисни кнопку ще раз і надішли фото/відео/гіфку.');
 });
 
 // ================= 🔘 ОБРОБКА КНОПОК =================
@@ -99,6 +148,13 @@ bot.on('callback_query', async (cb) => {
   
   if (cb.data === 'about') {
     bot.sendMessage(chatId, '🧙‍♀️ Про Мегумін\n\nЯ — архіволшебниця з Коносуби!\n💥 Вибухи\n💱 Курси валют\n🎮 Dota 2 статистика\n🎂 Дні народження\n\nEXPLOSION!');
+    return;
+  }
+
+  // 🔹 Кнопка "Отримати File ID"
+  if (cb.data === 'get_file_id') {
+    waitingForMedia[chatId] = true;
+    bot.sendMessage(chatId, '📎 **Надішли фото/відео/гіфку/стікер**, і я покажу File ID:');
     return;
   }
 
@@ -184,7 +240,7 @@ function getRecentMatches(steamId64, count = 10) {
   return new Promise((resolve) => {
     https.get(`https://api.opendota.com/api/players/${steamId64}/recentMatches?limit=${count}`, {
       headers: { 'User-Agent': 'Megumin-Bot' },
-      timeout: 20000 // Збільшено тайм-аут для 100 ігор
+      timeout: 20000
     }, (res) => {
       let data = '';
       res.on('data', c => data += c);
@@ -204,13 +260,11 @@ function formatStats(matches, playerName, count) {
   const losses = actualCount - wins;
   const winrate = actualCount > 0 ? Math.round(wins / actualCount * 100) : 0;
   
-  // Середній KDA
   const totalK = matches.reduce((s, m) => s + (m.kills || 0), 0);
   const totalD = matches.reduce((s, m) => s + (m.deaths || 0), 0);
   const totalA = matches.reduce((s, m) => s + (m.assists || 0), 0);
   const avgKDA = actualCount > 0 ? ((totalK + totalA) / Math.max(totalD, 1)).toFixed(2) : '0.00';
   
-  // Топ герої
   const heroStats = {};
   matches.forEach(m => {
     const hero = m.hero_name || 'Unknown';
@@ -224,7 +278,6 @@ function formatStats(matches, playerName, count) {
     .map(([hero, stats]) => `${hero} (${stats.wins}/${stats.games})`)
     .join(', ');
   
-  // Останній матч
   const lastMatch = matches[0];
   const lastResult = lastMatch?.win ? '🟢 Перемога' : '🔴 Поразка';
   const lastHero = lastMatch?.hero_name || '—';
