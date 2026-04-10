@@ -95,12 +95,12 @@ function getCurrency() {
   });
 }
 
-// ⛽ ЦІНИ НА ПАЛИВО (Тільки реальні дані)
+// ⛽ ЦІНИ НА ПАЛИВО
 const axios = require('axios');
 
 async function getFuelPrices() {
   try {
-    const { data: html } = await axios.get(
+    const {  html } = await axios.get(
       'https://index.minfin.com.ua/ua/markets/fuel/',
       {
         headers: {
@@ -111,9 +111,14 @@ async function getFuelPrices() {
       }
     );
 
-    const a95 = html.match(/А-95[\s\S]{0,200}?(\d+[.,]\d+)/)?.[1];
-    const dt  = html.match(/ДП|Дизель[\s\S]{0,200}?(\d+[.,]\d+)/)?.[1];
-    const gas = html.match(/Газ[\s\S]{0,200}?(\d+[.,]\d+)/)?.[1];
+    // А-95
+    const a95 = html.match(/А-95[\s\S]{0,300}?(\d+[.,]\d+)/)?.[1];
+    
+    // ДП - шукаємо кілька варіантів: ДП, Дизель, Diesel
+    const dt = html.match(/(?:ДП|Дизель|Diesel)[\s\S]{0,300}?(\d+[.,]\d+)/)?.[1];
+    
+    // Газ
+    const gas = html.match(/Газ[\s\S]{0,300}?(\d+[.,]\d+)/)?.[1];
 
     if (!a95 && !dt && !gas) {
       throw new Error('parse failed');
