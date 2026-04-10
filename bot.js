@@ -6,13 +6,24 @@ const https = require('https');
 const BOT_TOKEN = process.env.BOT_TOKEN;
 const ADMIN_CHAT_ID = Number(process.env.ADMIN_CHAT_ID);
 
+// 📦 Конфіги				  
 let BIRTHDAYS = [];
 try { BIRTHDAYS = require('./birthdays.json'); } catch {}
 
 let PLAYERS = [];
 try { PLAYERS = require('./players.json').players; } catch {}
 
-if (!BOT_TOKEN) process.exit(1);
+// 📖 Опис бота (окремий файл)
+let BOT_INFO = { about: '🧙‍♀️ Привіт! Я Мегумін! 💥' }; // Резерв
+try { BOT_INFO = require('./info_bot.json'); } catch (e) {
+  console.log('⚠️ info_bot.json не знайдено, використовується стандартний опис');
+}
+
+// 🔥 Перевірка токенів
+if (!BOT_TOKEN) {
+  console.error('❌ BOT_TOKEN not found');
+  process.exit(1);
+}
 
 const bot = new TelegramBot(BOT_TOKEN, { polling: true });
 bot.deleteWebHook(); // 🔥 фікс 409
@@ -103,7 +114,7 @@ bot.on('callback_query', async cb => {
   }
 
   if (cb.data === 'about') {
-    return bot.sendMessage(chatId, '🧙‍♀️ Я Мегумін!');
+        return bot.sendMessage(chatId, BOT_INFO.about, { parse_mode: 'Markdown' });
   }
 
   if (cb.data === 'get_file_id') {
