@@ -16,7 +16,7 @@ const { getCurrency } = require('./currency.js');
 birthdays.loadBirthdays();
 dota.loadPlayers();
 
-// 📖 Читаємо info_bot.json — ЖОРСТКИЙ РЕЖИМ (БЕЗ ЗАПАСНИХ ВАРІАНТІВ)
+// 📖 Читаємо info_bot.json — ЖОРСТКИЙ РЕЖИМ
 let botInfo;
 try {
   const rawData = fs.readFileSync('info_bot.json', 'utf8');
@@ -30,7 +30,7 @@ try {
 } catch (err) {
   console.error('❌ КРИТИЧНА ПОМИЛКА info_bot.json:', err.message);
   console.error('🛑 Бот зупинено. Перевірте файл.');
-  process.exit(1); // Бот вимикається, якщо файл невірний
+  process.exit(1);
 }
 
 // 🔥 Перевірка токену
@@ -48,10 +48,10 @@ let birthdayNotifiedToday = false;
 // ================= МЕНЮ =================
 const mainMenu = {
   inline_keyboard: [
-    [{ text: '💥 Explosion!', callback_ 'explosion' }],
-    [{ text: '💱 Курс валют', callback_ 'currency' }],
+    [{ text: '💥 Explosion!', callback_data: 'explosion' }],
+    [{ text: '💱 Курс валют', callback_data: 'currency' }],
     [{ text: '🎮 Dota 2 статистика', callback_data: 'dota_menu' }],
-    [{ text: '🧙‍♀️ Про Мегумін', callback_ 'about' }]
+    [{ text: '🧙‍♀️ Про Мегумін', callback_data: 'about' }]
   ]
 };
 
@@ -94,11 +94,13 @@ bot.on('callback_query', async cb => {
             bot.deleteMessage(chatId, sentMsg.message_id).catch(() => {});
             if (typeof result === 'string') {
               bot.sendMessage(chatId, result, { parse_mode: 'Markdown' });
-            } else {
+            } else if (result.photo) {
               bot.sendPhoto(chatId, result.photo, { 
                 caption: result.text, 
                 parse_mode: 'Markdown' 
               });
+            } else {
+              bot.sendMessage(chatId, result.text, { parse_mode: 'Markdown' });
             }
           })
           .catch(err => {
@@ -129,13 +131,11 @@ bot.on('callback_query', async cb => {
   // 🧙‍♀️ ПРО МЕГУМІН (ТЕКСТ + ГІФКА)
   if (cb.data === 'about') {
     try {
-      // 1. Спочатку відправляємо текст з файлу
       await bot.sendMessage(chatId, botInfo.about, { 
         parse_mode: 'Markdown',
         disable_web_page_preview: true 
       });
 
-      // 2. Потім відправляємо відео
       const gifPath = path.join(__dirname, 'gif', 'anime-megumin.mp4');
       if (fs.existsSync(gifPath)) {
         await bot.sendVideo(chatId, gifPath);
