@@ -62,10 +62,10 @@ bot.on('callback_query', async cb => {
   }
 
   if (cb.data === 'currency') {
-    bot.sendMessage(chatId, '⏳ Завантажую курс...', { parse_mode: 'Markdown' });
-    getCurrency().then(text => 
-      bot.sendMessage(chatId, text, { parse_mode: 'Markdown' })
-    );
+    bot.sendMessage(chatId, '⏳ Завантажую курс...');
+    getCurrency()
+      .then(text => bot.sendMessage(chatId, text, { parse_mode: 'Markdown' }))
+      .catch(() => bot.sendMessage(chatId, '❌ Не вдалося отримати курс'));
   }
 
   if (cb.data === 'about') {
@@ -79,11 +79,15 @@ bot.on('callback_query', async cb => {
 
 // ================= ФУНКЦІЇ =================
 function sendExplosion(chatId) {
-  const gif = 'CgACAgQAAxkBAAMCadep_WqfcQ14s78soH2lBvQ3wkMAAngGAAK8muRQ4pvZxf4pVQY7BA';
-  bot.sendAnimation(chatId, gif, { caption: '💥 EXPLOSION!' });
+  const videoPath = path.join(__dirname, 'gif', 'megumin_explosion.mp4');
+  
+  if (fs.existsSync(videoPath)) {
+    bot.sendVideo(chatId, videoPath, { caption: '💥 EXPLOSION!' });
+  } else {
+    console.error('❌ Файл megumin_explosion.mp4 не знайдено!');
+    bot.sendMessage(chatId, '💥 EXPLOSION! (відео не знайдено)');
+  }
 }
-
-// ⚠️ Функцію getCurrency() видалено - тепер вона в currency.js
 
 // ================= ⏰ АВТО =================
 setInterval(() => {
@@ -98,7 +102,6 @@ setInterval(() => {
 
   if (time === "12:00" && !birthdayNotifiedToday && ADMIN_CHAT_ID) {
     const today = birthdays.getTodayBirthdays();
-
     if (today.length > 0) {
       const names = today.map(p => p.name);
       birthdays.sendBirthdayGreeting(bot, ADMIN_CHAT_ID, names);
@@ -106,7 +109,6 @@ setInterval(() => {
     } else {
       console.log('📭 Немає ДН сьогодні');
     }
-
     birthdayNotifiedToday = true;
   }
 
@@ -114,14 +116,10 @@ setInterval(() => {
     explosionSentToday = false;
     birthdayNotifiedToday = false;
   }
-
 }, 60000);
 
 // ================= 🌐 SERVER =================
 const PORT = process.env.PORT || 3000;
-
-http.createServer((_, res) => {
-  res.end('OK');
-}).listen(PORT);
+http.createServer((_, res) => res.end('OK')).listen(PORT);
 
 console.log('✅ Bot started');
