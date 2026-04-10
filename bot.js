@@ -25,7 +25,7 @@ const bot = new TelegramBot(BOT_TOKEN, { polling: true });
 // 📊 Стани
 let explosionSentToday = false;
 let birthdayNotifiedToday = false;
-let waitingForMedia = {}; // Хто чекає на медіа після кнопки "Отримати File ID"
+let waitingForMedia = {};
 
 // ================= 📋 ГОЛОВНЕ МЕНЮ =================
 const mainMenu = {
@@ -34,7 +34,7 @@ const mainMenu = {
     [{ text: '💱 Курс валют', callback_ 'currency' }],
     [{ text: '🎮 Dota 2 статистика', callback_ 'dota_menu' }],
     [{ text: '🧙‍♀️ Про Мегумін', callback_ 'about' }],
-    [{ text: '🆔 Отримати File ID', callback_ 'get_file_id' }] // 🔥 НОВА КНОПКА
+    [{ text: '🆔 Отримати File ID', callback_ 'get_file_id' }]
   ]
 };
 
@@ -42,9 +42,9 @@ const mainMenu = {
 function getPlayerMenu() {
   const keyboard = PLAYERS.map(p => [{ 
     text: p.name, 
-    callback_data: `dota_select_${p.id}` 
+    callback_ `dota_select_${p.id}` 
   }]);
-  keyboard.push([{ text: '🔙 Назад', callback_data: 'back_to_main' }]);
+  keyboard.push([{ text: '🔙 Назад', callback_ 'back_to_main' }]);
   return { inline_keyboard: keyboard };
 }
 
@@ -52,10 +52,10 @@ function getPlayerMenu() {
 function getGamesCountMenu(playerId) {
   return {
     inline_keyboard: [
-      [{ text: '📈 Останні 10 ігор', callback_data: `dota_stats_${playerId}_10` }],
-      [{ text: '📊 Останні 50 ігор', callback_data: `dota_stats_${playerId}_50` }],
-      [{ text: '📉 Останні 100 ігор', callback_data: `dota_stats_${playerId}_100` }],
-      [{ text: '🔙 Назад до гравців', callback_data: 'dota_menu' }]
+      [{ text: '📈 Останні 10 ігор', callback_ `dota_stats_${playerId}_10` }],
+      [{ text: '📊 Останні 50 ігор', callback_ `dota_stats_${playerId}_50` }],
+      [{ text: '📉 Останні 100 ігор', callback_ `dota_stats_${playerId}_100` }],
+      [{ text: '🔙 Назад до гравців', callback_ 'dota_menu' }]
     ]
   };
 }
@@ -78,13 +78,9 @@ bot.onText(/\/getid/, (msg) => {
 bot.on('message', (msg) => {
   const chatId = msg.chat.id;
   
-  // Якщо не чекаємо на медіа від цього чату — ігноруємо
   if (!waitingForMedia[chatId]) return;
-  
-  // Скидаємо стан
   delete waitingForMedia[chatId];
   
-  // GIF
   if (msg.animation) {
     const file = msg.animation;
     bot.sendMessage(chatId, 
@@ -96,7 +92,6 @@ bot.on('message', (msg) => {
     return;
   }
   
-  // Фото
   if (msg.photo && msg.photo.length > 0) {
     const file = msg.photo[msg.photo.length - 1];
     bot.sendMessage(chatId, 
@@ -107,7 +102,6 @@ bot.on('message', (msg) => {
     return;
   }
   
-  // Відео
   if (msg.video) {
     const file = msg.video;
     bot.sendMessage(chatId, 
@@ -119,7 +113,6 @@ bot.on('message', (msg) => {
     return;
   }
   
-  // Стикери
   if (msg.sticker) {
     bot.sendMessage(chatId, 
       `✨ **File ID стікера:**\n\`${msg.sticker.file_id}\``, 
@@ -128,7 +121,6 @@ bot.on('message', (msg) => {
     return;
   }
   
-  // Якщо не медіа
   bot.sendMessage(chatId, '❌ Це не медіа. Натисни кнопку ще раз і надішли фото/відео/гіфку.');
 });
 
@@ -137,7 +129,6 @@ bot.on('callback_query', async (cb) => {
   const chatId = cb.message.chat.id;
   await bot.answerCallbackQuery(cb.id);
 
-  // 🔹 Головне меню
   if (cb.data === 'explosion') { sendExplosion(chatId); return; }
   
   if (cb.data === 'currency') {
@@ -151,14 +142,12 @@ bot.on('callback_query', async (cb) => {
     return;
   }
 
-  // 🔹 Кнопка "Отримати File ID"
   if (cb.data === 'get_file_id') {
     waitingForMedia[chatId] = true;
     bot.sendMessage(chatId, '📎 **Надішли фото/відео/гіфку/стікер**, і я покажу File ID:');
     return;
   }
 
-  // 🔹 Dota 2 Логіка
   if (cb.data === 'dota_menu') {
     if (PLAYERS.length === 0) {
       bot.sendMessage(chatId, '❌ Список гравців порожній. Додай гравців у players.json');
@@ -175,7 +164,6 @@ bot.on('callback_query', async (cb) => {
     return;
   }
   
-  // 🔹 Вибір гравця (динамічний)
   if (cb.data.startsWith('dota_select_')) {
     const playerId = cb.data.replace('dota_select_', '');
     bot.sendMessage(chatId, '📊 **Обери кількість ігор для статистики:**', {
@@ -184,7 +172,6 @@ bot.on('callback_query', async (cb) => {
     return;
   }
   
-  // 🔹 Запит статистики (динамічний)
   if (cb.data.startsWith('dota_stats_')) {
     const parts = cb.data.split('_');
     const playerId = parts[2];
