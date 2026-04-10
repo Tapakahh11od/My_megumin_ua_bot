@@ -1,7 +1,6 @@
 const TelegramBot = require('node-telegram-bot-api');
 const http = require('http');
 const https = require('https');
-const axios = require('axios');
 
 // 🔐 Змінні середовища (тільки для Render)
 const BOT_TOKEN = process.env.BOT_TOKEN;
@@ -28,12 +27,11 @@ const bot = new TelegramBot(BOT_TOKEN, { polling: true });
 let explosionSentToday = false;
 let birthdayNotifiedToday = false;
 
-// ================= 📋 МЕНЮ =================
+// ================= 📋 МЕНЮ (без палива) =================
 const mainMenu = {
   inline_keyboard: [
     [{ text: '💥 Explosion!', callback_data: 'explosion' }],
     [{ text: '💱 Курс валют', callback_data: 'currency' }],
-    [{ text: '⛽ Ціни на паливо', callback_data: 'fuel' }],
     [{ text: '🧙‍♀️ Про Мегумін', callback_data: 'about' }]
   ]
 };
@@ -109,12 +107,8 @@ bot.on('callback_query', async (cb) => {
       bot.sendMessage(chatId, '⏳ Завантажую курс...');
       getCurrency().then(t => bot.sendMessage(chatId, t));
       break;
-    case 'fuel':
-      bot.sendMessage(chatId, '⏳ Завантажую ціни на паливо...');
-      getFuelPrices().then(t => bot.sendMessage(chatId, t));
-      break;
     case 'about':
-      bot.sendMessage(chatId, '🧙‍♀️ Про Мегумін\n\nЯ — архіволшебниця з Коносуби!\n💥 Вибухи\n💱 Курси валют\n⛽ Паливо\n🎂 Дні народження\n\nEXPLOSION!');
+      bot.sendMessage(chatId, '🧙‍♀️ Про Мегумін\n\nЯ — архіволшебниця з Коносуби!\n💥 Вибухи\n💱 Курси валют\n🎂 Дні народження\n\nEXPLOSION!');
       break;
   }
 });
@@ -142,57 +136,6 @@ function getCurrency() {
   });
 }
 
-// ⛽ ЦІНИ НА ПАЛИВО (Покращений парсинг + логування)
-async function getFuelPrices() {
-  try {
-    console.log('🔍 Запит до Minfin для палива...');
-    
-    const {  html } = await axios.get(
-      'https://index.minfin.com.ua/ua/markets/fuel/',
-      {
-        headers: {
-          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
-          'Accept': 'text/html,application/xhtml+xml',
-          'Accept-Language': 'uk-UA,uk;q=0.9,en;q=0.8'
-        },
-        timeout: 12000,
-        maxRedirects: 5
-      }
-    );
-
-    console.log('✅ HTML отримано, довжина:', html.length);
-
-    // Більш гнучкі регулярні вирази
-    // Шукаємо "А-95" або "А95" з будь-яким роздільником
-    const a95 = html.match(/(?:А[\s\-]?95|А-95)[^<>]{0,100}?(\d+[.,]\d+)/i)?.[1];
-    
-    // Дизель: ДП, Дизель, Diesel, Диз.пальне
-    const dt = html.match(/(?:ДП|Дизель|Diesel|Диз\.\s*пальне)[^<>]{0,150}?(\d+[.,]\d+)/i)?.[1];
-    
-    // Газ: Газ, Пропан, Скран
-    const gas = html.match(/(?:Газ|Пропан|Скран)[^<>]{0,100}?(\d+[.,]\d+)/i)?.[1];
-
-    console.log(`📊 Знайдено: А95=${a95}, ДП=${dt}, Газ=${gas}`);
-
-    if (!a95 && !dt && !gas) {
-      console.error('❌ Не знайдено жодної ціни в HTML');
-      throw new Error('parse failed');
-    }
-
-    return `⛽ Середні ціни (Україна):
-
-А-95: ${a95 || '—'} ₴
-ДП: ${dt || '—'} ₴
-Газ: ${gas || '—'} ₴
-
-(дані: index.minfin.com.ua)`;
-
-  } catch (e) {
-    console.error('❌ Minfin fuel error:', e.message);
-    return '❌ Не вдалося отримати актуальні ціни на паливо. Спробуйте пізніше.';
-  }
-}
-
 function getTodayBirthdays() {
   const now = new Date().toLocaleString('en-US', { timeZone: 'Europe/Kyiv' });
   const date = new Date(now);
@@ -207,19 +150,40 @@ setInterval(() => {
   const date = new Date(now);
   const time = `${String(date.getHours()).padStart(2, '0')}:${String(date.getMinutes()).padStart(2, '0')}`;
 
+  // 💥 Вибух о 18:00
   if (time === "18:00" && !explosionSentToday) {
     sendExplosion(ADMIN_CHAT_ID);
     explosionSentToday = true;
     console.log('💥 Вибух надіслано!');
   }
 
-  if (time === "09:00" && !birthdayNotifiedToday) {
+  // 🎂 Привітання з Днем Народження о 13:00 (для тесту)
+  if (time === "13:00" && !birthdayNotifiedToday) {
     const today = getTodayBirthdays();
     if (today.length > 0) {
       const names = today.map(p => p.name).join(', ');
-      bot.sendMessage(ADMIN_CHAT_ID, `🎉 З Днем Народження!\n${names}`);
+      
+      // 🎁 Круте привітання від Мегумін
+      const greeting = 
+        `🧙‍♀️ **УВАГА! СЬОГОДНІ ОСОБЛИВИЙ ДЕНЬ!** 💥\n\n` +
+        `🎉 Вітаю з Днем Народження, ${names}!\n\n` +
+        `✨ Нехай твоє життя буде яскравим, як мій вибух!\n` +
+        `🔥 Нехай мрії збуваються з гучним БА-БА-БАХ!\n` +
+        `💫 А кожен день приносить нові магії!\n\n` +
+        `🎂 Тримай святковий танець на честь тебе! 👇`;
+      
+      // 🎬 Святкова гіфка (файл ID)
+      // 💡 Якщо не працює — надішли боту будь-яку гіфку, скопіюй file_id з відповіді і встав сюди
+      const birthdayGif = 'CgACAgQAAxkBAAMFadi81IGwjoOZUeRA_2qtxsJsenUAAkAIAAIY1PVRwmNUQHc8GXI7BA';
+      
+      // Надсилаємо текст + гіфку
+      bot.sendMessage(ADMIN_CHAT_ID, greeting, { parse_mode: 'Markdown' });
+      bot.sendAnimation(ADMIN_CHAT_ID, birthdayGif, { 
+        caption: `💥 **EXPLOSION FOR ${names.toUpperCase()}!** 💥` 
+      });
+      
       birthdayNotifiedToday = true;
-      console.log('🎂 Привітання надіслано!');
+      console.log(`🎂 Привітання надіслано для: ${names}`);
     }
   }
 
