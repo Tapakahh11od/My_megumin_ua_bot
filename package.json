@@ -1,17 +1,20 @@
 {
   "name": "my_bot_megumin",
   "version": "1.0.0",
-  "description": "",
+  "description": "Telegram bot Megumin - explosions, currency & birthdays 🧙‍♀️💥",
   "main": "bot.js",
   "scripts": {
+    "start": "node bot.js",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
-  "keywords": [],
-  "author": "",
-  "license": "ISC",
+  "keywords": ["telegram", "bot", "megumin", "konosuba"],
+  "author": "Denis",
+  "license": "MIT",
   "type": "commonjs",
+  "engines": {
+    "node": "18.x"
+  },
   "dependencies": {
-    "axios": "^1.15.0",
     "node-telegram-bot-api": "^0.67.0"
   }
 }
