@@ -95,21 +95,45 @@ function getCurrency() {
   });
 }
 
+// ⛽ ЦІНИ НА ПАЛИВО
 function getFuelPrices() {
   return new Promise((resolve) => {
-    const req = https.request({ hostname: 'minfin.com.ua', path: '/api/currency/fuel/', method: 'GET', headers: { 'User-Agent': 'Mozilla/5.0' }, timeout: 10000 }, (res) => {
+    // Використовуємо стабільне джерело
+    https.get('https://opencours.com.ua/api/fuel', { 
+      headers: { 'User-Agent': 'Mozilla/5.0' },
+      timeout: 8000 
+    }, (res) => {
       let data = '';
-      res.on('data', c => data += c);
+      res.on('data', chunk => data += chunk);
+
       res.on('end', () => {
         try {
           const json = JSON.parse(data);
-          resolve(`⛽ Паливо:\n\nА-92: ${json.A92?.sale?.toFixed(2) ?? '—'}\nА-95: ${json.A95?.sale?.toFixed(2) ?? '—'}\nДП: ${json.Diesel?.sale?.toFixed(2) ?? '—'}\nГаз: ${json.Gas?.sale?.toFixed(2) ?? '—'}`);
-        } catch { resolve('❌ Помилка палива'); }
+          
+          // Перевіряємо структуру відповіді (може відрізнятися залежно від API)
+          // Тут приклад для загального формату, можливо знадобиться адаптація
+          if (json && json.fuel) {
+             const a95 = json.fuel.find(f => f.name === 'А-95')?.price || '—';
+             const a92 = json.fuel.find(f => f.name === 'А-92')?.price || '—';
+             const dt = json.fuel.find(f => f.name === 'ДП')?.price || '—';
+             const gas = json.fuel.find(f => f.name === 'Газ')?.price || '—';
+             
+             resolve(`⛽ Паливо (середнє по Україні):\n\nА-92: ${a92} ₴\nА-95: ${a95} ₴\nДП: ${dt} ₴\nГаз: ${gas} ₴`);
+          } else {
+            // Фолбек, якщо формат інший
+            resolve('⛽ Паливо:\n⚠️ Тимчасово недоступно або змінено формат даних.');
+          }
+        } catch (e) {
+          console.error('❌ Fuel parse error:', e.message);
+          resolve('❌ Помилка обробки даних палива');
+        }
       });
+    }).on('error', (err) => {
+      console.error('❌ Fuel connection error:', err.message);
+      resolve('❌ Не вдалося з'єднатися з джерелом палива');
+    }).on('timeout', () => {
+      resolve('⏱️ Тайм-аут запиту палива');
     });
-    req.on('error', () => resolve('❌ Помилка з\'єднання'));
-    req.on('timeout', () => { req.destroy(); resolve('⏱️ Таймаут'); });
-    req.end();
   });
 }
 
