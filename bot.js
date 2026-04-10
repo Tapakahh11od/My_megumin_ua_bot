@@ -1,7 +1,6 @@
 const TelegramBot = require('node-telegram-bot-api');
 const http = require('http');
-const https = require('https');
-const fs = require('fs'); // ✅ Додайте це
+const fs = require('fs');
 
 // 🔐 ENV
 const BOT_TOKEN = process.env.BOT_TOKEN;
@@ -9,6 +8,8 @@ const ADMIN_CHAT_ID = Number(process.env.ADMIN_CHAT_ID);
 
 // 📦 МОДУЛІ
 const birthdays = require('./birthdays.js');
+const { getCurrency } = require('./currency.js'); // ✅ Новий імпорт
+
 birthdays.loadBirthdays();
 
 // 📖 Читаємо info_bot.json
@@ -61,12 +62,13 @@ bot.on('callback_query', async cb => {
   }
 
   if (cb.data === 'currency') {
-    bot.sendMessage(chatId, '⏳ Завантажую курс...');
-    getCurrency().then(t => bot.sendMessage(chatId, t));
+    bot.sendMessage(chatId, '⏳ Завантажую курс...', { parse_mode: 'Markdown' });
+    getCurrency().then(text => 
+      bot.sendMessage(chatId, text, { parse_mode: 'Markdown' })
+    );
   }
 
   if (cb.data === 'about') {
-    // ✅ Використовуємо текст з info_bot.json
     const aboutText = botInfo.about || '🧙‍♀️ Я Мегумін! EXPLOSION!';
     bot.sendMessage(chatId, aboutText, { 
       parse_mode: 'Markdown',
@@ -81,45 +83,25 @@ function sendExplosion(chatId) {
   bot.sendAnimation(chatId, gif, { caption: '💥 EXPLOSION!' });
 }
 
-function getCurrency() {
-  return new Promise(resolve => {
-    https.get('https://api.monobank.ua/bank/currency', res => {
-      let data = '';
-      res.on('data', c => data += c);
-      res.on('end', () => {
-        try {
-          const json = JSON.parse(data);
-          const usd = json.find(r => r.currencyCodeA === 840 && r.currencyCodeB === 980);
-          resolve(`USD: ${usd?.rateBuy ?? '-'} / ${usd?.rateSell ?? '-'}`);
-        } catch {
-          resolve('❌ Помилка курсу');
-        }
-      });
-    });
-  });
-}
+// ⚠️ Функцію getCurrency() видалено - тепер вона в currency.js
 
 // ================= ⏰ АВТО =================
 setInterval(() => {
   const kyiv = new Date(new Date().toLocaleString('en-US', { timeZone: 'Europe/Kyiv' }));
   const time = `${kyiv.getHours().toString().padStart(2, '0')}:${kyiv.getMinutes().toString().padStart(2, '0')}`;
 
-  // 💥 18:00
   if (time === "18:00" && !explosionSentToday && ADMIN_CHAT_ID) {
     sendExplosion(ADMIN_CHAT_ID);
     explosionSentToday = true;
     console.log('💥 Explosion sent');
   }
 
-  // 🎂 19:30
   if (time === "19:40" && !birthdayNotifiedToday && ADMIN_CHAT_ID) {
     const today = birthdays.getTodayBirthdays();
 
     if (today.length > 0) {
       const names = today.map(p => p.name);
-
       birthdays.sendBirthdayGreeting(bot, ADMIN_CHAT_ID, names);
-
       console.log('🎂 Birthday sent:', names.join(', '));
     } else {
       console.log('📭 Немає ДН сьогодні');
@@ -128,7 +110,6 @@ setInterval(() => {
     birthdayNotifiedToday = true;
   }
 
-  // 🔄 reset
   if (time === "00:01") {
     explosionSentToday = false;
     birthdayNotifiedToday = false;

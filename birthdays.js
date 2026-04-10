@@ -26,21 +26,24 @@ function getTodayBirthdays() {
 }
 
 // 🎉 Відправка
-function sendBirthdayGreeting(bot, chatId, names) {
+async function sendBirthdayGreeting(bot, chatId, names) {
   const videoPath = path.join(__dirname, 'gif', 'konosuba.mp4');
 
-  const text =
+  const greetingText =
     `🎉 УВАГА! СЬОГОДНІ ОСОБЛИВИЙ ДЕНЬ! ✨\n\n` +
     `🎈 Вітаю з Днем Народження, ${names.join(', ')}!\n\n` +
     `🎆 Нехай твоє життя буде яскравим, як мій вибух!\n` +
     `🔥 Нехай мрії збуваються з гучним БА-БА-БАХ!\n` +
-    `🎇 А кожен день приносить нові магії!\n\n` +
-    `🎂 Тримай святковий танець на честь тебе! 👇`;
+    `🎇 А кожен день приносить нові магії!`;
 
+  const videoCaption = `🎂 Тримай святковий танець на честь тебе! 👇`;
+
+  // Спочатку відправляємо текст
+  await bot.sendMessage(chatId, greetingText);
+
+  // Потім відправляємо відео
   if (fs.existsSync(videoPath)) {
-    bot.sendVideo(chatId, videoPath, { caption: text });
-  } else {
-    bot.sendMessage(chatId, text);
+    await bot.sendVideo(chatId, videoPath, { caption: videoCaption });
   }
 }
 
