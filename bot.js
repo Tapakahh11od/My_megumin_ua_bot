@@ -8,7 +8,7 @@ const ADMIN_CHAT_ID = Number(process.env.ADMIN_CHAT_ID);
 
 // 📦 МОДУЛІ
 const birthdays = require('./birthdays.js');
-const { getCurrency } = require('./currency.js'); // ✅ Новий імпорт
+const { getCurrency } = require('./currency.js');
 
 birthdays.loadBirthdays();
 

@@ -10,27 +10,34 @@ function getCurrency() {
       
       res.on('end', () => {
         try {
-          const json = JSON.parse(data);
+          const parsed = JSON.parse(data);
+          
+          // ✅ Перевіряємо, чи це масив
+          if (!Array.isArray(parsed)) {
+            console.error('❌ API повернув не масив:', parsed);
+            resolve('❌ Тимчасова помилка курсу');
+            return;
+          }
           
           // USD (840) to UAH (980)
-          const usd = json.find(r => 
+          const usd = parsed.find(r => 
             r.currencyCodeA === 840 && r.currencyCodeB === 980
           );
           
           // EUR (978) to UAH (980)
-          const eur = json.find(r => 
+          const eur = parsed.find(r => 
             r.currencyCodeA === 978 && r.currencyCodeB === 980
           );
           
           let result = '💱 *Курс валюти MonoBank*\n\n';
           
-          if (usd) {
+          if (usd && usd.rateBuy !== undefined) {
             result += `🇺🇸 *USD:* ${usd.rateBuy} / ${usd.rateSell}\n`;
           } else {
             result += `🇺🇸 *USD:* дані недоступні\n`;
           }
           
-          if (eur) {
+          if (eur && eur.rateBuy !== undefined) {
             result += `🇪🇺 *EUR:* ${eur.rateBuy} / ${eur.rateSell}\n`;
           } else {
             result += `🇪🇺 *EUR:* дані недоступні\n`;
