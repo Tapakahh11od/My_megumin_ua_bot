@@ -2,6 +2,7 @@ const TelegramBot = require('node-telegram-bot-api');
 const http = require('http');
 const fs = require('fs');
 const path = require('path');
+const dota = require('./dota.js');
 
 // 🔐 ENV
 const BOT_TOKEN = process.env.BOT_TOKEN;
@@ -11,19 +12,28 @@ const ADMIN_CHAT_ID = Number(process.env.ADMIN_CHAT_ID);
 const birthdays = require('./birthdays.js');
 const { getCurrency } = require('./currency.js');
 
+// 🔄 ЗАВАНТАЖЕННЯ ДАНИХ
 birthdays.loadBirthdays();
+dota.loadPlayers();
 
-// 📖 Читаємо info_bot.json
-let botInfo = {};
+// 📖 Читаємо info_bot.json — ЖОРСТКИЙ РЕЖИМ (БЕЗ ЗАПАСНИХ ВАРІАНТІВ)
+let botInfo;
 try {
   const rawData = fs.readFileSync('info_bot.json', 'utf8');
   botInfo = JSON.parse(rawData);
-  console.log('✅ info_bot.json завантажено');
+  
+  if (!botInfo.about) {
+    throw new Error('У файлі відсутній ключ "about"');
+  }
+  
+  console.log('✅ info_bot.json завантажено успішно');
 } catch (err) {
-  console.error('❌ Помилка читання info_bot.json:', err.message);
+  console.error('❌ КРИТИЧНА ПОМИЛКА info_bot.json:', err.message);
+  console.error('🛑 Бот зупинено. Перевірте файл.');
+  process.exit(1); // Бот вимикається, якщо файл невірний
 }
 
-// 🔥 Перевірка
+// 🔥 Перевірка токену
 if (!BOT_TOKEN) {
   console.error('❌ BOT_TOKEN not found');
   process.exit(1);
@@ -38,9 +48,10 @@ let birthdayNotifiedToday = false;
 // ================= МЕНЮ =================
 const mainMenu = {
   inline_keyboard: [
-    [{ text: '💥 Explosion!', callback_data: 'explosion' }],
-    [{ text: '💱 Курс валют', callback_data: 'currency' }],
-    [{ text: '🧙‍♀️ Про Мегумін', callback_data: 'about' }]
+    [{ text: '💥 Explosion!', callback_ 'explosion' }],
+    [{ text: '💱 Курс валют', callback_ 'currency' }],
+    [{ text: '🎮 Dota 2 статистика', callback_data: 'dota_menu' }],
+    [{ text: '🧙‍♀️ Про Мегумін', callback_ 'about' }]
   ]
 };
 
@@ -58,10 +69,56 @@ bot.on('callback_query', async cb => {
   const chatId = cb.message.chat.id;
   await bot.answerCallbackQuery(cb.id);
 
+  // 🎮 DOTA 2: Меню вибору гравця
+  if (cb.data === 'dota_menu') {
+    const keyboard = dota.getPlayersKeyboard();
+    if (keyboard.inline_keyboard.length > 0) {
+      bot.sendMessage(chatId, '🎮 *Оберіть гравця для перегляду статистики:*\n_Показано останні 20 матчів_', { 
+        parse_mode: 'Markdown', 
+        reply_markup: keyboard 
+      });
+    } else {
+      bot.sendMessage(chatId, '❌ Список гравців порожній.');
+    }
+    return;
+  }
+
+  // 🎮 DOTA 2: Статистика гравця
+  if (cb.data.startsWith('dota_player:')) {
+    const playerId = cb.data.split(':')[1];
+    
+    bot.sendMessage(chatId, '⏳ *Завантаження статистики з OpenDota...*', { parse_mode: 'Markdown' })
+      .then(sentMsg => {
+        dota.getPlayerStats(playerId)
+          .then(result => {
+            bot.deleteMessage(chatId, sentMsg.message_id).catch(() => {});
+            if (typeof result === 'string') {
+              bot.sendMessage(chatId, result, { parse_mode: 'Markdown' });
+            } else {
+              bot.sendPhoto(chatId, result.photo, { 
+                caption: result.text, 
+                parse_mode: 'Markdown' 
+              });
+            }
+          })
+          .catch(err => {
+            bot.deleteMessage(chatId, sentMsg.message_id).catch(() => {});
+            console.error('❌ Dota API Error:', err.message);
+            let errorMsg = '❌ Не вдалося отримати дані';
+            if (err.message === 'TIMEOUT') errorMsg = '⏰ Сервер не відповідає';
+            if (err.message.includes('404')) errorMsg = '❌ Профіль не знайдено';
+            bot.sendMessage(chatId, errorMsg);
+          });
+      });
+    return;
+  }
+
+  // 💥 EXPLOSION
   if (cb.data === 'explosion') {
     sendExplosion(chatId);
   }
 
+  // 💱 КУРС ВАЛЮТ
   if (cb.data === 'currency') {
     bot.sendMessage(chatId, '⏳ Завантажую курс...');
     getCurrency()
@@ -69,12 +126,25 @@ bot.on('callback_query', async cb => {
       .catch(() => bot.sendMessage(chatId, '❌ Не вдалося отримати курс'));
   }
 
+  // 🧙‍♀️ ПРО МЕГУМІН (ТЕКСТ + ГІФКА)
   if (cb.data === 'about') {
-    const aboutText = botInfo.about || '🧙‍♀️ Я Мегумін! EXPLOSION!';
-    bot.sendMessage(chatId, aboutText, { 
-      parse_mode: 'Markdown',
-      disable_web_page_preview: true 
-    });
+    try {
+      // 1. Спочатку відправляємо текст з файлу
+      await bot.sendMessage(chatId, botInfo.about, { 
+        parse_mode: 'Markdown',
+        disable_web_page_preview: true 
+      });
+
+      // 2. Потім відправляємо відео
+      const gifPath = path.join(__dirname, 'gif', 'anime-megumin.mp4');
+      if (fs.existsSync(gifPath)) {
+        await bot.sendVideo(chatId, gifPath);
+      } else {
+        console.error('❌ Відео anime-megumin.mp4 не знайдено!');
+      }
+    } catch (err) {
+      console.error('❌ Помилка у функції "Про Мегумін":', err.message);
+    }
   }
 });
 

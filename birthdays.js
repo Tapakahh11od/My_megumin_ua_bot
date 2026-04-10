@@ -10,11 +10,12 @@ function loadBirthdays() {
     BIRTHDAYS = data;
     console.log(`📅 Завантажено ${BIRTHDAYS.length} ДН`);
   } catch (e) {
-    console.error('❌ Помилка birthdays.json');
+    console.error('❌ Помилка birthdays.json:', e.message);
   }
 }
 
 // 📅 Сьогоднішні
+// Формат дати у birthdays.json: "ДД.ММ" (наприклад, "05.01")
 function getTodayBirthdays() {
   const now = new Date().toLocaleString('en-US', { timeZone: 'Europe/Kyiv' });
   const date = new Date(now);
@@ -27,6 +28,7 @@ function getTodayBirthdays() {
 
 // 🎉 Відправка
 async function sendBirthdayGreeting(bot, chatId, names) {
+  // ✅ ПЕРЕВІР: назва файлу має співпадати з реальною у папці gif/
   const videoPath = path.join(__dirname, 'gif', 'konosuba.mp4');
 
   const greetingText =
@@ -38,12 +40,18 @@ async function sendBirthdayGreeting(bot, chatId, names) {
 
   const videoCaption = `🎂 Тримай святковий танець на честь тебе! 👇`;
 
-  // Спочатку відправляємо текст
-  await bot.sendMessage(chatId, greetingText);
+  try {
+    // Спочатку відправляємо текст
+    await bot.sendMessage(chatId, greetingText);
 
-  // Потім відправляємо відео
-  if (fs.existsSync(videoPath)) {
-    await bot.sendVideo(chatId, videoPath, { caption: videoCaption });
+    // Потім відправляємо відео
+    if (fs.existsSync(videoPath)) {
+      await bot.sendVideo(chatId, videoPath, { caption: videoCaption });
+    } else {
+      console.warn('⚠️ Відео не знайдено:', videoPath);
+    }
+  } catch (err) {
+    console.error('❌ Помилка відправки ДН:', err.message);
   }
 }
 
