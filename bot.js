@@ -158,7 +158,7 @@ setInterval(() => {
   }
 
   // 🎂 Привітання з Днем Народження о 13:00 (для тесту)
-  if (time === "13:00" && !birthdayNotifiedToday) {
+  if (time === "12:00" && !birthdayNotifiedToday) {
     const today = getTodayBirthdays();
     if (today.length > 0) {
       const names = today.map(p => p.name).join(', ');
