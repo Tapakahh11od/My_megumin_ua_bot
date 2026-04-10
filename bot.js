@@ -95,7 +95,7 @@ function getCurrency() {
   });
 }
 
-// ⛽ ЦІНИ НА ПАЛИВО (Виправлена версія)
+// ⛽ ЦІНИ НА ПАЛИВО (Тільки реальні дані)
 const axios = require('axios');
 
 async function getFuelPrices() {
@@ -129,15 +129,7 @@ async function getFuelPrices() {
 
   } catch (e) {
     console.error('Minfin error:', e.message);
-
-    // 🔁 fallback (щоб НІКОЛИ не падало)
-    return `⛽ Орієнтовні ціни:
-
-А-95: ~65–70 ₴
-ДП: ~65–70 ₴
-Газ: ~30 ₴
-
-(резервні дані)`;
+    return '❌ Не вдалося отримати актуальні ціни на паливо. Спробуйте пізніше.';
   }
 }
 
