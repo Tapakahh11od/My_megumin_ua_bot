@@ -1,6 +1,7 @@
 const TelegramBot = require('node-telegram-bot-api');
 const http = require('http');
 const https = require('https');
+const fs = require('fs'); // ✅ Додайте це
 
 // 🔐 ENV
 const BOT_TOKEN = process.env.BOT_TOKEN;
@@ -9,6 +10,16 @@ const ADMIN_CHAT_ID = Number(process.env.ADMIN_CHAT_ID);
 // 📦 МОДУЛІ
 const birthdays = require('./birthdays.js');
 birthdays.loadBirthdays();
+
+// 📖 Читаємо info_bot.json
+let botInfo = {};
+try {
+  const rawData = fs.readFileSync('info_bot.json', 'utf8');
+  botInfo = JSON.parse(rawData);
+  console.log('✅ info_bot.json завантажено');
+} catch (err) {
+  console.error('❌ Помилка читання info_bot.json:', err.message);
+}
 
 // 🔥 Перевірка
 if (!BOT_TOKEN) {
@@ -55,7 +66,12 @@ bot.on('callback_query', async cb => {
   }
 
   if (cb.data === 'about') {
-    bot.sendMessage(chatId, '🧙‍♀️ Я Мегумін! EXPLOSION!');
+    // ✅ Використовуємо текст з info_bot.json
+    const aboutText = botInfo.about || '🧙‍♀️ Я Мегумін! EXPLOSION!';
+    bot.sendMessage(chatId, aboutText, { 
+      parse_mode: 'Markdown',
+      disable_web_page_preview: true 
+    });
   }
 });
 
@@ -95,8 +111,8 @@ setInterval(() => {
     console.log('💥 Explosion sent');
   }
 
-  // 🎂 12:00
-  if (time === "19:30" && !birthdayNotifiedToday && ADMIN_CHAT_ID) {
+  // 🎂 19:30
+  if (time === "19:40" && !birthdayNotifiedToday && ADMIN_CHAT_ID) {
     const today = birthdays.getTodayBirthdays();
 
     if (today.length > 0) {
