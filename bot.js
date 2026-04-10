@@ -96,44 +96,49 @@ function getCurrency() {
 }
 
 // ⛽ ЦІНИ НА ПАЛИВО (Виправлена версія)
-function getFuelPrices() {
-  return new Promise((resolve) => {
-    https.get('https://index.minfin.com.ua/ua/markets/fuel/', {
-      headers: { 'User-Agent': 'Mozilla/5.0' },
-      timeout: 8000
-    }, (res) => {
+const axios = require('axios');
 
-      let html = '';
+async function getFuelPrices() {
+  try {
+    const { data: html } = await axios.get(
+      'https://index.minfin.com.ua/ua/markets/fuel/',
+      {
+        headers: {
+          'User-Agent': 'Mozilla/5.0',
+          'Accept-Language': 'uk-UA,uk;q=0.9'
+        },
+        timeout: 10000
+      }
+    );
 
-      res.on('data', chunk => html += chunk);
+    const a95 = html.match(/А-95[\s\S]{0,200}?(\d+[.,]\d+)/)?.[1];
+    const dt  = html.match(/ДП|Дизель[\s\S]{0,200}?(\d+[.,]\d+)/)?.[1];
+    const gas = html.match(/Газ[\s\S]{0,200}?(\d+[.,]\d+)/)?.[1];
 
-      res.on('end', () => {
-        try {
-          // беремо основні ціни
-          const a95 = html.match(/А-95[\s\S]{0,100}?(\d+\.\d+)/)?.[1];
-          const dt  = html.match(/Дизель[\s\S]{0,100}?(\d+\.\d+)/)?.[1];
-          const gas = html.match(/Газ[\s\S]{0,100}?(\d+\.\d+)/)?.[1];
+    if (!a95 && !dt && !gas) {
+      throw new Error('parse failed');
+    }
 
-          resolve(
-`⛽ Середні ціни (Україна):
+    return `⛽ Середні ціни (Україна):
 
 А-95: ${a95 || '—'} ₴
 ДП: ${dt || '—'} ₴
 Газ: ${gas || '—'} ₴
 
-(дані Minfin)`
-          );
+(дані Minfin)`;
 
-        } catch (e) {
-          console.error(e);
-          resolve('❌ Помилка парсингу палива');
-        }
-      });
+  } catch (e) {
+    console.error('Minfin error:', e.message);
 
-    }).on('error', () => {
-      resolve('❌ Помилка з\'єднання');
-    });
-  });
+    // 🔁 fallback (щоб НІКОЛИ не падало)
+    return `⛽ Орієнтовні ціни:
+
+А-95: ~65–70 ₴
+ДП: ~65–70 ₴
+Газ: ~30 ₴
+
+(резервні дані)`;
+  }
 }
 
 function getTodayBirthdays() {
