@@ -30,11 +30,11 @@ let waitingForMedia = {};
 // ================= 📋 ГОЛОВНЕ МЕНЮ =================
 const mainMenu = {
   inline_keyboard: [
-    [{ text: '💥 Explosion!', callback_ 'explosion' }],
-    [{ text: '💱 Курс валют', callback_ 'currency' }],
-    [{ text: '🎮 Dota 2 статистика', callback_ 'dota_menu' }],
-    [{ text: '🧙‍♀️ Про Мегумін', callback_ 'about' }],
-    [{ text: '🆔 Отримати File ID', callback_ 'get_file_id' }]
+    [{ text: '💥 Explosion!', callback_data: 'explosion' }],
+    [{ text: '💱 Курс валют', callback_data: 'currency' }],
+    [{ text: '🎮 Dota 2 статистика', callback_data: 'dota_menu' }],
+    [{ text: '🧙‍♀️ Про Мегумін', callback_data: 'about' }],
+    [{ text: '🆔 Отримати File ID', callback_data: 'get_file_id' }]
   ]
 };
 
