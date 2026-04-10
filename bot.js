@@ -96,7 +96,7 @@ setInterval(() => {
     console.log('💥 Explosion sent');
   }
 
-  if (time === "19:40" && !birthdayNotifiedToday && ADMIN_CHAT_ID) {
+  if (time === "12:00" && !birthdayNotifiedToday && ADMIN_CHAT_ID) {
     const today = birthdays.getTodayBirthdays();
 
     if (today.length > 0) {
