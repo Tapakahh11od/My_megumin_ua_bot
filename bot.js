@@ -1,6 +1,7 @@
 const TelegramBot = require('node-telegram-bot-api');
 const http = require('http');
 const https = require('https');
+const axios = require('axios');
 
 // 🔐 Змінні середовища (тільки для Render)
 const BOT_TOKEN = process.env.BOT_TOKEN;
@@ -51,6 +52,52 @@ bot.onText(/\/getid/, (msg) => {
   bot.sendMessage(msg.chat.id, text);
 });
 
+// ================= 🆔 АВТО-ВІДПОВІДЬ З FILE_ID (для медіа) =================
+bot.on('message', (msg) => {
+  // Ігноруємо команди
+  if (msg.text && msg.text.startsWith('/')) return;
+  
+  // GIF (анімація)
+  if (msg.animation) {
+    const file = msg.animation;
+    bot.sendMessage(msg.chat.id, 
+      `🎬 **File ID GIF:**\n\`${file.file_id}\`\n\n` +
+      `📛 Назва: ${file.file_name || '—'}\n` +
+      `📊 Розмір: ${file.file_size} байт`, 
+      { parse_mode: 'Markdown' }
+    );
+  }
+  
+  // Фото (беремо найбільшу версію)
+  if (msg.photo && msg.photo.length > 0) {
+    const file = msg.photo[msg.photo.length - 1];
+    bot.sendMessage(msg.chat.id, 
+      `📷 **File ID фото:**\n\`${file.file_id}\`\n\n` +
+      `📊 Розмір: ${file.file_size} байт`, 
+      { parse_mode: 'Markdown' }
+    );
+  }
+  
+  // Відео
+  if (msg.video) {
+    const file = msg.video;
+    bot.sendMessage(msg.chat.id, 
+      `🎥 **File ID відео:**\n\`${file.file_id}\`\n\n` +
+      `📛 Назва: ${file.file_name || '—'}\n` +
+      `📊 Розмір: ${file.file_size} байт`, 
+      { parse_mode: 'Markdown' }
+    );
+  }
+  
+  // Стикери
+  if (msg.sticker) {
+    bot.sendMessage(msg.chat.id, 
+      `✨ **File ID стікера:**\n\`${msg.sticker.file_id}\``, 
+      { parse_mode: 'Markdown' }
+    );
+  }
+});
+
 // ================= 🔘 КНОПКИ =================
 bot.on('callback_query', async (cb) => {
   const chatId = cb.message.chat.id;
@@ -95,32 +142,40 @@ function getCurrency() {
   });
 }
 
-// ⛽ ЦІНИ НА ПАЛИВО
-const axios = require('axios');
-
+// ⛽ ЦІНИ НА ПАЛИВО (Покращений парсинг + логування)
 async function getFuelPrices() {
   try {
+    console.log('🔍 Запит до Minfin для палива...');
+    
     const {  html } = await axios.get(
       'https://index.minfin.com.ua/ua/markets/fuel/',
       {
         headers: {
-          'User-Agent': 'Mozilla/5.0',
-          'Accept-Language': 'uk-UA,uk;q=0.9'
+          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+          'Accept': 'text/html,application/xhtml+xml',
+          'Accept-Language': 'uk-UA,uk;q=0.9,en;q=0.8'
         },
-        timeout: 10000
+        timeout: 12000,
+        maxRedirects: 5
       }
     );
 
-    // А-95
-    const a95 = html.match(/А-95[\s\S]{0,300}?(\d+[.,]\d+)/)?.[1];
+    console.log('✅ HTML отримано, довжина:', html.length);
+
+    // Більш гнучкі регулярні вирази
+    // Шукаємо "А-95" або "А95" з будь-яким роздільником
+    const a95 = html.match(/(?:А[\s\-]?95|А-95)[^<>]{0,100}?(\d+[.,]\d+)/i)?.[1];
     
-    // ДП - шукаємо кілька варіантів: ДП, Дизель, Diesel
-    const dt = html.match(/(?:ДП|Дизель|Diesel)[\s\S]{0,300}?(\d+[.,]\d+)/)?.[1];
+    // Дизель: ДП, Дизель, Diesel, Диз.пальне
+    const dt = html.match(/(?:ДП|Дизель|Diesel|Диз\.\s*пальне)[^<>]{0,150}?(\d+[.,]\d+)/i)?.[1];
     
-    // Газ
-    const gas = html.match(/Газ[\s\S]{0,300}?(\d+[.,]\d+)/)?.[1];
+    // Газ: Газ, Пропан, Скран
+    const gas = html.match(/(?:Газ|Пропан|Скран)[^<>]{0,100}?(\d+[.,]\d+)/i)?.[1];
+
+    console.log(`📊 Знайдено: А95=${a95}, ДП=${dt}, Газ=${gas}`);
 
     if (!a95 && !dt && !gas) {
+      console.error('❌ Не знайдено жодної ціни в HTML');
       throw new Error('parse failed');
     }
 
@@ -130,10 +185,10 @@ async function getFuelPrices() {
 ДП: ${dt || '—'} ₴
 Газ: ${gas || '—'} ₴
 
-(дані Minfin)`;
+(дані: index.minfin.com.ua)`;
 
   } catch (e) {
-    console.error('Minfin error:', e.message);
+    console.error('❌ Minfin fuel error:', e.message);
     return '❌ Не вдалося отримати актуальні ціни на паливо. Спробуйте пізніше.';
   }
 }
