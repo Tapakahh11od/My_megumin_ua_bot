@@ -15,6 +15,7 @@ const { getCurrency } = require('./currency.js');
 // 🔄 ЗАВАНТАЖЕННЯ ДАНИХ
 birthdays.loadBirthdays();
 dota.loadPlayers();
+dota.loadHeroes();
 
 // 📖 info_bot.json
 let botInfo;

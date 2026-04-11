@@ -1,27 +1,62 @@
-const fs = require('fs');
-const path = require('path');
 const https = require('https');
 
-// 🎮 Налаштування
-const PLAYERS_FILE = path.join(__dirname, 'players.json');
-const API_BASE = 'https://api.opendota.com/api';
-const MATCH_LIMIT = 100;
+// 🧠 КЕШ (5 хв)
+const cache = new Map();
+const CACHE_TIME = 5 * 60 * 1000;
 
-let PLAYERS = [];
+// 🦸 HERO MAP (можна розширити)
+let HEROES = {};
 
-// 📥 Завантаження списку гравців
-function loadPlayers() {
+// ================= API =================
+function apiRequest(url) {
+  return new Promise((resolve, reject) => {
+    https.get(url, res => {
+      let data = '';
+
+      res.on('data', c => data += c);
+
+      res.on('end', () => {
+        try {
+          resolve(JSON.parse(data));
+        } catch (e) {
+          reject(e);
+        }
+      });
+
+    }).on('error', reject);
+  });
+}
+
+// ================= LOAD HEROES =================
+async function loadHeroes() {
   try {
-    const data = JSON.parse(fs.readFileSync(PLAYERS_FILE, 'utf8'));
-    PLAYERS = data.players || [];
-    console.log(`🎮 Завантажено ${PLAYERS.length} гравців Dota 2`);
-  } catch (err) {
-    console.error('❌ КРИТИЧНА ПОМИЛКА players.json:', err.message);
-    process.exit(1);
+    const data = await apiRequest('https://api.opendota.com/api/heroes');
+
+    data.forEach(h => {
+      HEROES[h.id] = h.localized_name;
+    });
+
+    console.log(`🦸 Loaded ${data.length} heroes`);
+  } catch (e) {
+    console.error('❌ Heroes load error', e.message);
   }
 }
 
-// 🔘 Клавіатура
+// ================= PLAYERS =================
+let PLAYERS = [];
+
+function loadPlayers() {
+  const fs = require('fs');
+  const path = require('path');
+
+  const data = JSON.parse(
+    fs.readFileSync(path.join(__dirname, 'players.json'), 'utf8')
+  );
+
+  PLAYERS = data.players || [];
+}
+
+// ================= KEYBOARD =================
 function getPlayersKeyboard() {
   return {
     inline_keyboard: PLAYERS.map(p => [{
@@ -31,170 +66,132 @@ function getPlayersKeyboard() {
   };
 }
 
-// 🌐 API запит
-function apiRequest(endpoint, label = '') {
-  return new Promise((resolve, reject) => {
-    const url = `${API_BASE}${endpoint}`;
-    console.log(`🔍 ${label}: ${url}`);
+// ================= GET 100 TURBO (PAGINATION) =================
+async function getTurboMatches(accountId) {
+  let results = [];
+  let offset = 0;
 
-    https.get(url, {
-      headers: { 'User-Agent': 'MeguminBot/2.0' },
-      timeout: 15000
-    }, res => {
-      let data = '';
+  while (results.length < 100 && offset < 500) {
+    const url =
+      `https://api.opendota.com/api/players/${accountId}/matches` +
+      `?lobby_type=7&limit=100&offset=${offset}`;
 
-      res.on('data', chunk => data += chunk);
+    const data = await apiRequest(url);
 
-      res.on('end', () => {
-        if (res.statusCode === 200) {
-          try {
-            resolve(JSON.parse(data));
-          } catch (e) {
-            reject(e);
-          }
-        } else {
-          reject(new Error(`HTTP ${res.statusCode}`));
-        }
-      });
+    if (!data || data.length === 0) break;
 
-    }).on('error', reject)
-      .on('timeout', () => reject(new Error('TIMEOUT')));
-  });
+    results = results.concat(data);
+    offset += 100;
+  }
+
+  return results.slice(0, 100);
 }
 
-// 📊 ГОЛОВНА ФУНКЦІЯ
+// ================= STATS =================
 async function getPlayerStats(playerId) {
   const player = PLAYERS.find(p => p.id === playerId);
-  if (!player) throw new Error('Гравця не знайдено');
+  if (!player) throw new Error('Player not found');
 
-  try {
-    // 🔄 Refresh
-    try {
-      await apiRequest(`/players/${player.steamId64}/refresh`);
-      await new Promise(r => setTimeout(r, 2000));
-    } catch {}
+  const cacheKey = player.steamId64;
+  const now = Date.now();
 
-    const profile = await apiRequest(`/players/${player.steamId64}`);
-
-    // 📥 Беремо більше матчів, щоб відфільтрувати Turbo
-    const matches = await apiRequest(`/players/${player.steamId64}/matches?limit=200`);
-
-    if (!matches.length) return '❌ Немає матчів';
-
-    // ⚡ ФІЛЬТР TURBO
-    const turboMatches = matches.filter(m => m.lobby_type === 7).slice(0, 100);
-
-    if (!turboMatches.length) {
-      return '⚠️ Немає Turbo ігор у останніх матчах';
+  // 🔥 CACHE CHECK
+  if (cache.has(cacheKey)) {
+    const cached = cache.get(cacheKey);
+    if (now - cached.time < CACHE_TIME) {
+      return cached.data;
     }
-
-    let wins = 0;
-    let totalKills = 0;
-    let totalDeaths = 0;
-    let totalAssists = 0;
-    let totalDuration = 0;
-    let totalGold = 0;
-
-    const heroStats = {};
-
-    turboMatches.forEach(m => {
-      const isRadiant = m.player_slot < 128;
-
-      if ((isRadiant && m.radiant_win) || (!isRadiant && !m.radiant_win)) {
-        wins++;
-      }
-
-      totalKills += m.kills || 0;
-      totalDeaths += m.deaths || 0;
-      totalAssists += m.assists || 0;
-      totalDuration += m.duration || 0;
-      totalGold += m.gold_per_min || 0;
-
-      // 🦸 Герої
-      if (m.hero_id) {
-        if (!heroStats[m.hero_id]) {
-          heroStats[m.hero_id] = { games: 0, wins: 0 };
-        }
-
-        heroStats[m.hero_id].games++;
-
-        if ((isRadiant && m.radiant_win) || (!isRadiant && !m.radiant_win)) {
-          heroStats[m.hero_id].wins++;
-        }
-      }
-    });
-
-    const games = turboMatches.length;
-    const losses = games - wins;
-
-    const winRate = ((wins / games) * 100).toFixed(1);
-
-    const avgKills = (totalKills / games).toFixed(1);
-    const avgDeaths = (totalDeaths / games).toFixed(1);
-    const avgAssists = (totalAssists / games).toFixed(1);
-
-    const avgTime = Math.round((totalDuration / games) / 60);
-    const avgGPM = Math.round(totalGold / games);
-
-    // 🔥 ТОП 5 ГЕРОЇВ
-    const topHeroes = Object.entries(heroStats)
-      .map(([heroId, data]) => ({
-        heroId,
-        games: data.games,
-        winrate: ((data.wins / data.games) * 100).toFixed(0)
-      }))
-      .sort((a, b) => b.games - a.games)
-      .slice(0, 5);
-
-    // 🧾 Профіль
-    const avatar = profile.profile?.avatarmedium;
-    const rank = profile.rank_tier || 'Невідомо';
-
-    // 📝 ТЕКСТ
-    let msg = `🎮 *${player.name}*\n`;
-    msg += `🏅 Ранг: ${rank}\n\n`;
-
-    msg += `⚡ *Turbo (останні ${games} ігор)*\n\n`;
-
-    msg += `✅ ${wins} | ❌ ${losses} (${winRate}%)\n\n`;
-
-    msg += `⚔️ KDA:\n`;
-    msg += `${avgKills} / ${avgDeaths} / ${avgAssists}\n\n`;
-
-    msg += `⏱️ ${avgTime} хв\n`;
-    msg += `💰 GPM: ${avgGPM}\n\n`;
-
-    msg += `🔥 *Топ герої:*\n`;
-
-    if (topHeroes.length === 0) {
-      msg += `— немає даних\n`;
-    } else {
-      topHeroes.forEach(h => {
-        msg += `ID ${h.heroId} — ${h.games} ігор (${h.winrate}%)\n`;
-      });
-    }
-
-    msg += `\n🔗 [Steam](https://steamcommunity.com/profiles/${player.steamId64})`;
-    msg += `\n🔗 [OpenDota](https://www.opendota.com/players/${player.steamId64})`;
-
-    if (avatar) {
-      return {
-        photo: avatar,
-        caption: msg,
-        parse_mode: 'Markdown'
-      };
-    }
-
-    return { text: msg, parse_mode: 'Markdown' };
-
-  } catch (err) {
-    console.error(err);
-    return '❌ Помилка отримання статистики';
   }
+
+  // 🧠 GET DATA
+  const profile = await apiRequest(
+    `https://api.opendota.com/api/players/${player.steamId64}`
+  );
+
+  const matches = await getTurboMatches(player.steamId64);
+
+  if (!matches.length) {
+    return '❌ No Turbo matches found';
+  }
+
+  let wins = 0;
+  let k = 0, d = 0, a = 0;
+  let time = 0;
+  let gpm = 0;
+
+  const heroStats = {};
+
+  matches.forEach(m => {
+    const isRadiant = m.player_slot < 128;
+    const win = (isRadiant && m.radiant_win) || (!isRadiant && !m.radiant_win);
+
+    if (win) wins++;
+
+    k += m.kills || 0;
+    d += m.deaths || 0;
+    a += m.assists || 0;
+    time += m.duration || 0;
+    gpm += m.gold_per_min || 0;
+
+    if (m.hero_id) {
+      if (!heroStats[m.hero_id]) {
+        heroStats[m.hero_id] = { games: 0, wins: 0 };
+      }
+
+      heroStats[m.hero_id].games++;
+      if (win) heroStats[m.hero_id].wins++;
+    }
+  });
+
+  const games = matches.length;
+
+  // 🔥 TOP HEROES
+  const topHeroes = Object.entries(heroStats)
+    .map(([id, h]) => ({
+      name: HEROES[id] || `Hero ${id}`,
+      games: h.games,
+      winrate: ((h.wins / h.games) * 100).toFixed(0)
+    }))
+    .sort((a, b) => b.games - a.games)
+    .slice(0, 3);
+
+  const result = {
+    text:
+`🎮 ${player.name}
+🏅 Rank: ${profile.rank_tier || 'Unknown'}
+
+⚡ Turbo (100 games)
+✅ ${wins} | ❌ ${games - wins} (${((wins/games)*100).toFixed(1)}%)
+
+⚔️ KDA: ${(k/games).toFixed(1)} / ${(d/games).toFixed(1)} / ${(a/games).toFixed(1)}
+⏱️ ${(time/games/60).toFixed(0)} min
+💰 GPM: ${(gpm/games).toFixed(0)}
+
+🔥 Top Heroes:
+${topHeroes.map(h =>
+`• ${h.name} — ${h.games} games (${h.winrate}%)`
+).join('\n')}
+
+🔗 OpenDota: https://www.opendota.com/players/${player.steamId64}`
+  };
+
+  // 💾 CACHE SAVE
+  cache.set(cacheKey, {
+    time: now,
+    data: result
+  });
+
+  if (profile.profile?.avatarmedium) {
+    result.photo = profile.profile.avatarmedium;
+  }
+
+  return result;
 }
 
+// ================= EXPORT =================
 module.exports = {
   loadPlayers,
+  loadHeroes,
   getPlayersKeyboard,
   getPlayerStats
 };
