@@ -16,20 +16,19 @@ const { getCurrency } = require('./currency.js');
 birthdays.loadBirthdays();
 dota.loadPlayers();
 
-// 📖 Читаємо info_bot.json — ЖОРСТКИЙ РЕЖИМ
+// 📖 info_bot.json
 let botInfo;
 try {
   const rawData = fs.readFileSync('info_bot.json', 'utf8');
   botInfo = JSON.parse(rawData);
-  
+
   if (!botInfo.about) {
     throw new Error('У файлі відсутній ключ "about"');
   }
-  
-  console.log('✅ info_bot.json завантажено успішно');
+
+  console.log('✅ info_bot.json завантажено');
 } catch (err) {
-  console.error('❌ КРИТИЧНА ПОМИЛКА info_bot.json:', err.message);
-  console.error('🛑 Бот зупинено. Перевірте файл.');
+  console.error('❌ ПОМИЛКА info_bot.json:', err.message);
   process.exit(1);
 }
 
@@ -69,49 +68,72 @@ bot.on('callback_query', async cb => {
   const chatId = cb.message.chat.id;
   await bot.answerCallbackQuery(cb.id);
 
-  // 🎮 DOTA 2: Меню вибору гравця
+  // 🎮 DOTA МЕНЮ
   if (cb.data === 'dota_menu') {
     const keyboard = dota.getPlayersKeyboard();
+
     if (keyboard.inline_keyboard.length > 0) {
-      bot.sendMessage(chatId, '🎮 *Оберіть гравця для перегляду статистики:*\n_Показано останні 20 матчів_', { 
-        parse_mode: 'Markdown', 
-        reply_markup: keyboard 
-      });
+      bot.sendMessage(
+        chatId,
+        '🎮 *Оберіть гравця:*\n_Показано останні 100 матчів (включаючи Turbo)_',
+        {
+          parse_mode: 'Markdown',
+          reply_markup: keyboard
+        }
+      );
     } else {
       bot.sendMessage(chatId, '❌ Список гравців порожній.');
     }
     return;
   }
 
-  // 🎮 DOTA 2: Статистика гравця
+  // 🎮 СТАТИСТИКА
   if (cb.data.startsWith('dota_player:')) {
     const playerId = cb.data.split(':')[1];
-    
-    bot.sendMessage(chatId, '⏳ *Завантаження статистики з OpenDota...*', { parse_mode: 'Markdown' })
-      .then(sentMsg => {
-        dota.getPlayerStats(playerId)
-          .then(result => {
-            bot.deleteMessage(chatId, sentMsg.message_id).catch(() => {});
-            if (typeof result === 'string') {
-              bot.sendMessage(chatId, result, { parse_mode: 'Markdown' });
-            } else if (result.photo) {
-              bot.sendPhoto(chatId, result.photo, { 
-                caption: result.text, 
-                parse_mode: 'Markdown' 
-              });
-            } else {
-              bot.sendMessage(chatId, result.text, { parse_mode: 'Markdown' });
-            }
-          })
-          .catch(err => {
-            bot.deleteMessage(chatId, sentMsg.message_id).catch(() => {});
-            console.error('❌ Dota API Error:', err.message);
-            let errorMsg = '❌ Не вдалося отримати дані';
-            if (err.message === 'TIMEOUT') errorMsg = '⏰ Сервер не відповідає';
-            if (err.message.includes('404')) errorMsg = '❌ Профіль не знайдено';
-            bot.sendMessage(chatId, errorMsg);
-          });
-      });
+
+    bot.sendMessage(
+      chatId,
+      '⏳ *Завантаження 100 матчів (включаючи Turbo)...*',
+      { parse_mode: 'Markdown' }
+    ).then(sentMsg => {
+
+      dota.getPlayerStats(playerId)
+        .then(result => {
+          bot.deleteMessage(chatId, sentMsg.message_id).catch(() => {});
+
+          if (typeof result === 'string') {
+            bot.sendMessage(chatId, result, { parse_mode: 'Markdown' });
+          } 
+          else if (result.photo) {
+            // ✅ ВИПРАВЛЕНО caption
+            bot.sendPhoto(chatId, result.photo, {
+              caption: result.caption,
+              parse_mode: 'Markdown'
+            });
+          } 
+          else {
+            bot.sendMessage(chatId, result.text, {
+              parse_mode: 'Markdown'
+            });
+          }
+        })
+        .catch(err => {
+          bot.deleteMessage(chatId, sentMsg.message_id).catch(() => {});
+          console.error('❌ Dota API Error:', err.message);
+
+          let errorMsg = '❌ Не вдалося отримати дані';
+
+          if (err.message === 'TIMEOUT')
+            errorMsg = '⏰ OpenDota не відповідає, спробуй ще раз';
+
+          if (err.message.includes('404'))
+            errorMsg = '❌ Профіль не знайдено або приватний';
+
+          bot.sendMessage(chatId, errorMsg);
+        });
+
+    });
+
     return;
   }
 
@@ -120,7 +142,7 @@ bot.on('callback_query', async cb => {
     sendExplosion(chatId);
   }
 
-  // 💱 КУРС ВАЛЮТ
+  // 💱 КУРС
   if (cb.data === 'currency') {
     bot.sendMessage(chatId, '⏳ Завантажую курс...');
     getCurrency()
@@ -128,22 +150,23 @@ bot.on('callback_query', async cb => {
       .catch(() => bot.sendMessage(chatId, '❌ Не вдалося отримати курс'));
   }
 
-  // 🧙‍♀️ ПРО МЕГУМІН (ТЕКСТ + ГІФКА)
+  // 🧙‍♀️ ПРО МЕГУМІН
   if (cb.data === 'about') {
     try {
-      await bot.sendMessage(chatId, botInfo.about, { 
+      await bot.sendMessage(chatId, botInfo.about, {
         parse_mode: 'Markdown',
-        disable_web_page_preview: true 
+        disable_web_page_preview: true
       });
 
       const gifPath = path.join(__dirname, 'gif', 'anime-megumin.mp4');
+
       if (fs.existsSync(gifPath)) {
         await bot.sendVideo(chatId, gifPath);
       } else {
-        console.error('❌ Відео anime-megumin.mp4 не знайдено!');
+        console.error('❌ anime-megumin.mp4 не знайдено');
       }
     } catch (err) {
-      console.error('❌ Помилка у функції "Про Мегумін":', err.message);
+      console.error('❌ Помилка about:', err.message);
     }
   }
 });
@@ -151,11 +174,10 @@ bot.on('callback_query', async cb => {
 // ================= ФУНКЦІЇ =================
 function sendExplosion(chatId) {
   const videoPath = path.join(__dirname, 'gif', 'megumin_explosion.mp4');
-  
+
   if (fs.existsSync(videoPath)) {
     bot.sendVideo(chatId, videoPath, { caption: '💥 EXPLOSION!' });
   } else {
-    console.error('❌ Файл megumin_explosion.mp4 не знайдено!');
     bot.sendMessage(chatId, '💥 EXPLOSION! (відео не знайдено)');
   }
 }
@@ -163,6 +185,7 @@ function sendExplosion(chatId) {
 // ================= ⏰ АВТО =================
 setInterval(() => {
   const kyiv = new Date(new Date().toLocaleString('en-US', { timeZone: 'Europe/Kyiv' }));
+
   const time = `${kyiv.getHours().toString().padStart(2, '0')}:${kyiv.getMinutes().toString().padStart(2, '0')}`;
 
   if (time === "18:00" && !explosionSentToday && ADMIN_CHAT_ID) {
@@ -173,13 +196,15 @@ setInterval(() => {
 
   if (time === "12:00" && !birthdayNotifiedToday && ADMIN_CHAT_ID) {
     const today = birthdays.getTodayBirthdays();
+
     if (today.length > 0) {
       const names = today.map(p => p.name);
       birthdays.sendBirthdayGreeting(bot, ADMIN_CHAT_ID, names);
-      console.log('🎂 Birthday sent:', names.join(', '));
+      console.log('🎂 Birthday:', names.join(', '));
     } else {
-      console.log('📭 Немає ДН сьогодні');
+      console.log('📭 Немає ДН');
     }
+
     birthdayNotifiedToday = true;
   }
 
