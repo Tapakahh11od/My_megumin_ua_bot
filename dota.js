@@ -65,97 +65,117 @@ function apiRequest(endpoint, label = '') {
 // 📊 ГОЛОВНА ФУНКЦІЯ
 async function getPlayerStats(playerId) {
   const player = PLAYERS.find(p => p.id === playerId);
-  if (!player) throw new Error(`Гравця "${playerId}" не знайдено`);
-
-  console.log(`🎮 Статистика для ${player.name}`);
+  if (!player) throw new Error('Гравця не знайдено');
 
   try {
-    // 🔄 Оновлення профілю
+    // 🔄 Refresh
     try {
-      await apiRequest(`/players/${player.steamId64}/refresh`, 'Refresh');
-    } catch (e) {
-      console.log('⚠️ Refresh не вдався (це нормально)');
+      await apiRequest(`/players/${player.steamId64}/refresh`);
+      await new Promise(r => setTimeout(r, 2000));
+    } catch {}
+
+    const profile = await apiRequest(`/players/${player.steamId64}`);
+
+    // 📥 Беремо більше матчів, щоб відфільтрувати Turbo
+    const matches = await apiRequest(`/players/${player.steamId64}/matches?limit=200`);
+
+    if (!matches.length) return '❌ Немає матчів';
+
+    // ⚡ ФІЛЬТР TURBO
+    const turboMatches = matches.filter(m => m.lobby_type === 7).slice(0, 100);
+
+    if (!turboMatches.length) {
+      return '⚠️ Немає Turbo ігор у останніх матчах';
     }
 
-    // 📥 Дані
-    const profile = await apiRequest(`/players/${player.steamId64}`, 'Profile');
-    const matches = await apiRequest(
-      `/players/${player.steamId64}/matches?limit=${MATCH_LIMIT}`,
-      'Matches'
-    );
-
-    if (!matches || matches.length === 0) {
-      return `⚠️ Немає матчів (можливо профіль приватний)`;
-    }
-
-    // 📊 Статистика
     let wins = 0;
     let totalKills = 0;
     let totalDeaths = 0;
     let totalAssists = 0;
     let totalDuration = 0;
+    let totalGold = 0;
 
-    const heroesPlayed = new Set();
-    let turboGames = 0;
+    const heroStats = {};
 
-    matches.forEach(m => {
-      // ✅ ПРАВИЛЬНЕ ВИЗНАЧЕННЯ ПЕРЕМОГИ
+    turboMatches.forEach(m => {
       const isRadiant = m.player_slot < 128;
+
       if ((isRadiant && m.radiant_win) || (!isRadiant && !m.radiant_win)) {
         wins++;
       }
 
-      // 📊 Статистика
       totalKills += m.kills || 0;
       totalDeaths += m.deaths || 0;
       totalAssists += m.assists || 0;
       totalDuration += m.duration || 0;
+      totalGold += m.gold_per_min || 0;
 
-      if (m.hero_id) heroesPlayed.add(m.hero_id);
+      // 🦸 Герої
+      if (m.hero_id) {
+        if (!heroStats[m.hero_id]) {
+          heroStats[m.hero_id] = { games: 0, wins: 0 };
+        }
 
-      // ⚡ Turbo режим
-      if (m.game_mode === 23) {
-        turboGames++;
+        heroStats[m.hero_id].games++;
+
+        if ((isRadiant && m.radiant_win) || (!isRadiant && !m.radiant_win)) {
+          heroStats[m.hero_id].wins++;
+        }
       }
     });
 
-    const games = matches.length;
+    const games = turboMatches.length;
     const losses = games - wins;
 
     const winRate = ((wins / games) * 100).toFixed(1);
 
-    // ✅ СЕРЕДНІ ЯК У ДОТІ
     const avgKills = (totalKills / games).toFixed(1);
     const avgDeaths = (totalDeaths / games).toFixed(1);
     const avgAssists = (totalAssists / games).toFixed(1);
 
-    const avgKDA = ((totalKills + totalAssists) / Math.max(totalDeaths, 1)).toFixed(2);
-
     const avgTime = Math.round((totalDuration / games) / 60);
+    const avgGPM = Math.round(totalGold / games);
+
+    // 🔥 ТОП 5 ГЕРОЇВ
+    const topHeroes = Object.entries(heroStats)
+      .map(([heroId, data]) => ({
+        heroId,
+        games: data.games,
+        winrate: ((data.wins / data.games) * 100).toFixed(0)
+      }))
+      .sort((a, b) => b.games - a.games)
+      .slice(0, 5);
 
     // 🧾 Профіль
     const avatar = profile.profile?.avatarmedium;
     const rank = profile.rank_tier || 'Невідомо';
 
-    // 📝 Повідомлення
+    // 📝 ТЕКСТ
     let msg = `🎮 *${player.name}*\n`;
     msg += `🏅 Ранг: ${rank}\n\n`;
 
-    msg += `📊 *Останні ${games} ігор (включаючи Turbo)*\n\n`;
+    msg += `⚡ *Turbo (останні ${games} ігор)*\n\n`;
 
-    msg += `✅ Перемоги: *${wins}* (${winRate}%)\n`;
-    msg += `❌ Поразки: *${losses}*\n\n`;
+    msg += `✅ ${wins} | ❌ ${losses} (${winRate}%)\n\n`;
 
-    msg += `⚔️ Середній KDA:\n`;
-    msg += `*${avgKills} / ${avgDeaths} / ${avgAssists}*\n`;
-    msg += `KDA: ${avgKDA}\n\n`;
+    msg += `⚔️ KDA:\n`;
+    msg += `${avgKills} / ${avgDeaths} / ${avgAssists}\n\n`;
 
-    msg += `⏱️ Сер. час: ${avgTime} хв\n`;
-    msg += `🦸 Героїв: ${heroesPlayed.size}\n`;
-    msg += `⚡ Turbo ігор: ${turboGames}\n\n`;
+    msg += `⏱️ ${avgTime} хв\n`;
+    msg += `💰 GPM: ${avgGPM}\n\n`;
 
-    msg += `🔗 [Steam](https://steamcommunity.com/profiles/${player.steamId64})\n`;
-    msg += `🔗 [OpenDota](https://www.opendota.com/players/${player.steamId64})`;
+    msg += `🔥 *Топ герої:*\n`;
+
+    if (topHeroes.length === 0) {
+      msg += `— немає даних\n`;
+    } else {
+      topHeroes.forEach(h => {
+        msg += `ID ${h.heroId} — ${h.games} ігор (${h.winrate}%)\n`;
+      });
+    }
+
+    msg += `\n🔗 [Steam](https://steamcommunity.com/profiles/${player.steamId64})`;
+    msg += `\n🔗 [OpenDota](https://www.opendota.com/players/${player.steamId64})`;
 
     if (avatar) {
       return {
@@ -165,19 +185,11 @@ async function getPlayerStats(playerId) {
       };
     }
 
-    return {
-      text: msg,
-      parse_mode: 'Markdown'
-    };
+    return { text: msg, parse_mode: 'Markdown' };
 
   } catch (err) {
     console.error(err);
-
-    if (err.message.includes('404')) {
-      return `❌ Профіль не знайдено або приватний`;
-    }
-
-    return `❌ Помилка отримання статистики`;
+    return '❌ Помилка отримання статистики';
   }
 }
 
