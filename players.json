@@ -1,7 +1,7 @@
 {
   "players": [
     { "id": "Denys", "name": "Денис", "steamId64": "140761401" },
-    { "id": "Volodymyr", "name": "Володимир", "steamId64": "76561198001981938" },
-    { "id": "Oleksiy", "name": "Олексій", "steamId64": "76561198095394281" }
+    { "id": "Volodymyr", "name": "Володимир", "steamId64": "41716210" },
+    { "id": "Oleksiy", "name": "Олексій", "steamId64": "135128553" }
   ]
 }
