@@ -3,7 +3,7 @@ const http = require('http');
 const fs = require('fs');
 const path = require('path');
 const cron = require('node-cron');
-const logger = require('./utils/logger'); // 🔥 Використовуємо Winston
+const logger = require('./utils/logger');
 const dota = require('./dota.js');
 
 // 🔐 ENV + ВАЛІДАЦІЯ
@@ -61,15 +61,14 @@ bot.deleteWebHook();
 // ================= MENU =================
 const mainMenu = {
     inline_keyboard: [
-        [{ text: '💥 Explosion!', callback_ 'explosion' }],
-        [{ text: '💱 Курс валют', callback_ 'currency' }],
-        [{ text: '🎮 Dota 2 статистика', callback_ 'dota_menu' }],
-        [{ text: '🧙‍♀️ Про Мегумін', callback_ 'about' }]
+        [{ text: '💥 Explosion!', callback_data: 'explosion' }],
+        [{ text: '💱 Курс валют', callback_data: 'currency' }],
+        [{ text: '🎮 Dota 2 статистика', callback_data: 'dota_menu' }],
+        [{ text: '🧙‍♀️ Про Мегумін', callback_data: 'about' }]
     ]
 };
 
 // ================= COMMANDS =================
-// ✅ ВАЖЛИВО: Екранування слешів \/
 bot.onText(/\/start/, msg => {
     bot.sendMessage(msg.chat.id, '🧙‍♀️ Привіт!\nНатисни /bot');
 });
@@ -86,16 +85,16 @@ bot.on('callback_query', async (cb) => {
     await bot.answerCallbackQuery(cb.id);
 
     try {
-        // 🎮 PLAYER STATS (особливий випадок з параметром)
+        // 🎮 PLAYER STATS
         if (cb.data.startsWith('dota_player:')) {
             const playerId = cb.data.split(':')[1];
             await callbackHandlers.handleDotaPlayer(bot, chatId, playerId);
             return;
         }
 
-        // 📋 Прості команди через switch
+        // 📋 Прості команди
         switch (cb.data) {
-            case 'explosion': // 💥 Тільки тут спрацьовує Explosion
+            case 'explosion':
                 await callbackHandlers.handleExplosion(bot, chatId);
                 break;
             case 'currency':
@@ -117,31 +116,22 @@ bot.on('callback_query', async (cb) => {
 });
 
 // ================= AUTO TASKS (CRON) =================
-
-// 🎂 Щодня о 12:00 за Києвом — перевірка днів народження
+// 🎂 Щодня о 12:00 за Києвом — дні народження
 cron.schedule('0 12 * * *', () => {
     logger.info('🔍 Checking birthdays...');
     if (!ADMIN_CHAT_ID) return;
 
     const today = birthdays.getTodayBirthdays();
-    
     if (today.length > 0) {
-        // ✅ Якщо є іменинники — вітаємо
         const names = today.map(p => p.name);
         birthdays.sendBirthdayGreeting(bot, ADMIN_CHAT_ID, names);
         logger.info(`🎉 Birthday greetings sent to: ${names.join(', ')}`);
-    } else {
-        // ✅ Якщо немає — нічого не робимо (просто лог)
-        logger.info('📅 No birthdays today.');
     }
 }, {
     timezone: 'Europe/Kyiv'
 });
 
-// 🗑️ КРОН НА 00:01 ВИДАЛЕНО (не потрібен, прапорці теж видалено)
-
 // ================= SERVER =================
-// 🔥 Важливо для Render: тримає процес активним
 const PORT = process.env.PORT || 3000;
 http.createServer((_, res) => res.end('OK')).listen(PORT);
 
