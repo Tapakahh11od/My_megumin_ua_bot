@@ -1,6 +1,7 @@
-// dota.js
 const https = require('https');
-const logger = require('./utils/logger'); // 🔥 Новий логер
+const fs = require('fs');
+const path = require('path');
+const logger = require('./utils/logger');
 
 // 🧠 CACHE
 const cache = new Map();
@@ -28,22 +29,30 @@ function apiRequest(url) {
 
 // ================= HEROES =================
 async function loadHeroes() {
-    const data = await apiRequest('https://api.opendota.com/api/heroes');
-    data.forEach(h => {
-        HEROES[h.id] = h.localized_name;
-    });
-    logger.info(`🦸 Heroes loaded: ${data.length}`);
+    try {
+        const data = await apiRequest('https://api.opendota.com/api/heroes');
+        data.forEach(h => {
+            HEROES[h.id] = h.localized_name;
+        });
+        logger.info(`🦸 Heroes loaded: ${data.length}`);
+    } catch (err) {
+        logger.error(`❌ Failed to fetch heroes: ${err.message}`);
+        throw err;
+    }
 }
 
 // ================= PLAYERS =================
 let PLAYERS = [];
 function loadPlayers() {
-    const fs = require('fs');
-    const path = require('path');
-    const data = JSON.parse(
-        fs.readFileSync(path.join(__dirname, 'players.json'), 'utf8')
-    );
-    PLAYERS = data.players || [];
+    try {
+        const data = JSON.parse(
+            fs.readFileSync(path.join(__dirname, 'players.json'), 'utf8')
+        );
+        PLAYERS = data.players || [];
+        logger.info(`👥 Players loaded: ${PLAYERS.length}`);
+    } catch (err) {
+        logger.error(`❌ Failed to load players: ${err.message}`);
+    }
 }
 
 // ================= KEYBOARD =================
@@ -51,7 +60,7 @@ function getPlayersKeyboard() {
     return {
         inline_keyboard: PLAYERS.map(p => [{
             text: `👤 ${p.name}`,
-            callback_data: `dota_player:${p.id}`
+            callback_data: `dota_player:${p.id}` // ✅ ВИПРАВЛЕНО
         }])
     };
 }
@@ -65,9 +74,7 @@ async function getTurboMatches(accountId) {
             `https://api.opendota.com/api/players/${accountId}/matches` +
             `?limit=100&offset=${offset}`;
         const data = await apiRequest(url);
-
         if (!Array.isArray(data) || data.length === 0) break;
-
         results = results.concat(data);
         offset += 100;
     }
