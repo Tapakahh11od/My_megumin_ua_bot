@@ -2,7 +2,7 @@ const TelegramBot = require('node-telegram-bot-api');
 const http = require('http');
 const fs = require('fs');
 const path = require('path');
-const cron = require('node-cron'); // ✅ Додано для розкладу
+const cron = require('node-cron');
 const dota = require('./dota.js');
 
 // 🔐 ENV + ВАЛІДАЦІЯ
@@ -57,7 +57,7 @@ try {
 const bot = new TelegramBot(BOT_TOKEN, { polling: true });
 bot.deleteWebHook();
 
-// FLAGS
+// FLAGS (використовуються в cron)
 let explosionSentToday = false;
 let birthdayNotifiedToday = false;
 
@@ -81,122 +81,42 @@ bot.onText(/\/bot/, msg => {
 });
 
 // ================= CALLBACK =================
+const callbackHandlers = require('./handlers/callbackHandlers');
+
 bot.on('callback_query', async (cb) => {
   const chatId = cb.message.chat.id;
   await bot.answerCallbackQuery(cb.id);
 
   try {
-    // 🎮 MENU
-    if (cb.data === 'dota_menu') {
-      const keyboard = dota.getPlayersKeyboard();
-      bot.sendMessage(
-        chatId,
-        '🎮 *Оберіть гравця:*\n_Останні 100 Turbo матчів_',
-        {
-          parse_mode: 'Markdown',
-          reply_markup: keyboard
-        }
-      );
-      return;
-    }
-
-    // 🎮 PLAYER STATS
+    // 🎮 PLAYER STATS (особливий випадок з параметром)
     if (cb.data.startsWith('dota_player:')) {
       const playerId = cb.data.split(':')[1];
-      if (!playerId) throw new Error('Invalid player ID');
-
-      const loadingMsg = await bot.sendMessage(
-        chatId,
-        '⏳ Завантаження статистики...'
-      );
-
-      try {
-        const result = await dota.getPlayerStats(playerId);
-        await bot.deleteMessage(chatId, loadingMsg.message_id).catch(() => {});
-
-        if (!result) {
-          return bot.sendMessage(chatId, '❌ Порожня відповідь');
-        }
-
-        if (typeof result === 'string') {
-          return bot.sendMessage(chatId, result, { parse_mode: 'Markdown' });
-        }
-
-        if (result.photo) {
-          return bot.sendPhoto(chatId, result.photo, {
-            caption: result.text || '📊 Dota stats',
-            parse_mode: 'Markdown'
-          });
-        }
-
-        return bot.sendMessage(chatId, result.text || '❌ Немає даних', {
-          parse_mode: 'Markdown'
-        });
-
-      } catch (err) {
-        console.error('❌ Dota error:', err.message);
-        await bot.deleteMessage(chatId, loadingMsg.message_id).catch(() => {});
-
-        let errorMsg = '❌ Помилка отримання даних';
-        if (err.message?.includes('404')) {
-          errorMsg = '❌ Профіль не знайдено або приватний';
-        }
-        if (err.message === 'TIMEOUT') {
-          errorMsg = '⏰ OpenDota не відповідає';
-        }
-        bot.sendMessage(chatId, errorMsg);
-      }
+      await callbackHandlers.handleDotaPlayer(bot, chatId, playerId);
       return;
     }
 
-    // 💥 EXPLOSION
-    if (cb.data === 'explosion') {
-      sendExplosion(chatId);
-    }
-
-    // 💱 CURRENCY
-    if (cb.data === 'currency') {
-      bot.sendMessage(chatId, '⏳ Завантажую курс...');
-      getCurrency()
-        .then(text =>
-          bot.sendMessage(chatId, text, { parse_mode: 'Markdown' })
-        )
-        .catch(() =>
-          bot.sendMessage(chatId, '❌ Помилка курсу')
-        );
-    }
-
-    // 🧙 ABOUT
-    if (cb.data === 'about') {
-      try {
-        await bot.sendMessage(chatId, botInfo.about, {
-          parse_mode: 'Markdown',
-          disable_web_page_preview: true
-        });
-
-        const gifPath = path.join(__dirname, 'gif', 'anime-megumin.mp4');
-        if (fs.existsSync(gifPath)) {
-          await bot.sendVideo(chatId, gifPath);
-        }
-      } catch (err) {
-        console.error('❌ About error:', err.message);
-      }
+    // 📋 Прості команди через switch
+    switch (cb.data) {
+      case 'explosion':
+        await callbackHandlers.handleExplosion(bot, chatId);
+        break;
+      case 'currency':
+        await callbackHandlers.handleCurrency(bot, chatId);
+        break;
+      case 'about':
+        await callbackHandlers.handleAbout(bot, chatId, botInfo);
+        break;
+      case 'dota_menu':
+        await callbackHandlers.handleDotaMenu(bot, chatId);
+        break;
+      default:
+        console.warn(`⚠️ Unknown callback: ${cb.data}`);
     }
   } catch (err) {
-    console.error('❌ Callback error:', err.message);
-    bot.sendMessage(chatId, '❌ Внутрішня помилка').catch(() => {});
+    console.error('❌ Callback handler error:', err.message);
+    await bot.sendMessage(chatId, '❌ Внутрішня помилка обробки запиту').catch(() => {});
   }
 });
-
-// ================= EXPLOSION =================
-function sendExplosion(chatId) {
-  const videoPath = path.join(__dirname, 'gif', 'megumin_explosion.mp4');
-  if (fs.existsSync(videoPath)) {
-    bot.sendVideo(chatId, videoPath, { caption: '💥 EXPLOSION!' });
-  } else {
-    bot.sendMessage(chatId, '💥 EXPLOSION!');
-  }
-}
 
 // ================= AUTO TASKS (CRON) =================
 
