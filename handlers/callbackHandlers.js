@@ -3,6 +3,7 @@ const fs = require('fs');
 const path = require('path');
 const { getCurrency } = require('../currency.js');
 const dota = require('../dota.js');
+const { withRetry } = require('../utils/retry'); // 🔥 Додано retry
 
 // 💥 Explosion
 const handleExplosion = (bot, chatId) => {
@@ -14,14 +15,15 @@ const handleExplosion = (bot, chatId) => {
   }
 };
 
-// 💱 Курс валют
+// 💱 Курс валют (з RETRY)
 const handleCurrency = async (bot, chatId) => {
   await bot.sendMessage(chatId, '⏳ Завантажую курс...');
   try {
-    const text = await getCurrency();
+    // 🔥 Тепер запит спробує повторитися до 3 разів
+    const text = await withRetry(() => getCurrency());
     await bot.sendMessage(chatId, text, { parse_mode: 'Markdown' });
   } catch {
-    await bot.sendMessage(chatId, '❌ Помилка курсу');
+    await bot.sendMessage(chatId, '❌ Помилка курсу (спробуйте пізніше)');
   }
 };
 
@@ -54,14 +56,16 @@ const handleDotaMenu = async (bot, chatId) => {
   );
 };
 
-// 🎮 Статистика гравця
+// 🎮 Статистика гравця (з RETRY)
 const handleDotaPlayer = async (bot, chatId, playerId) => {
   if (!playerId) throw new Error('Invalid player ID');
   
   const loadingMsg = await bot.sendMessage(chatId, '⏳ Завантаження статистики...');
   
   try {
-    const result = await dota.getPlayerStats(playerId);
+    // 🔥 OpenDota може бути нестабільним, retry врятує ситуацію
+    const result = await withRetry(() => dota.getPlayerStats(playerId));
+    
     await bot.deleteMessage(chatId, loadingMsg.message_id).catch(() => {});
 
     if (!result) return bot.sendMessage(chatId, '❌ Порожня відповідь');
@@ -83,7 +87,7 @@ const handleDotaPlayer = async (bot, chatId, playerId) => {
     
     let errorMsg = '❌ Помилка отримання даних';
     if (err.message?.includes('404')) errorMsg = '❌ Профіль не знайдено або приватний';
-    if (err.message === 'TIMEOUT') errorMsg = '⏰ OpenDota не відповідає';
+    if (err.message === 'TIMEOUT') errorMsg = '⏰ OpenDota не відповідає після спроб';
     
     await bot.sendMessage(chatId, errorMsg);
   }
