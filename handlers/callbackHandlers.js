@@ -48,7 +48,7 @@ const handleDotaMenu = async (bot, chatId) => {
   const keyboard = dota.getPlayersKeyboard();
   await bot.sendMessage(
     chatId,
-    '🎮 *Оберіть гравця:*\n_Останні 100 Turbo матчів_',
+    '🎮 *Оберіть гравця:*',
     {
       parse_mode: 'Markdown',
       reply_markup: keyboard
