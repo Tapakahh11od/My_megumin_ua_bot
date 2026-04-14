@@ -1,7 +1,15 @@
 const { mainMenu } = require('../utils/keyboards');
 
 const showMenu = async (ctx) => {
-  await ctx.reply('Обери магію 🧙‍♀️', mainMenu());
+  try {
+    await ctx.reply(
+      '🧙‍♀️ Обери магію Мегумін:',
+      mainMenu()
+    );
+  } catch (err) {
+    console.error('Menu error:', err);
+    await ctx.reply('❌ Помилка меню');
+  }
 };
 
 module.exports = { showMenu };

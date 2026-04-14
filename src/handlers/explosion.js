@@ -1,13 +1,20 @@
 const path = require('path');
 
 const explosionHandler = async (ctx) => {
-  await ctx.answerCbQuery();
+  try {
+    await ctx.answerCbQuery();
 
-  await ctx.reply('💥 EXPLOSION!!!');
+    await ctx.reply('💥 EXPLOSION!!!');
 
-  await ctx.replyWithAnimation({
-    source: path.join(__dirname, '../../gif/explosion.gif'),
-  });
+    await ctx.replyWithVideo({
+      source: path.join(__dirname, '../../gif/EXPLOSION.mp4'),
+      caption: '💣 Megumin Explosion!!!',
+    });
+
+  } catch (err) {
+    console.error('Explosion error:', err);
+    await ctx.reply('💥 EXPLOSION failed...');
+  }
 };
 
 module.exports = { explosionHandler };

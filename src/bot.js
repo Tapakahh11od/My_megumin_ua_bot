@@ -8,13 +8,39 @@ const { meguminHandler } = require('./handlers/megumin');
 
 const bot = new Telegraf(process.env.BOT_TOKEN);
 
-// команда
+// =====================
+// ⚡ GLOBAL ERROR HANDLER
+// =====================
+bot.catch((err, ctx) => {
+  console.error('BOT ERROR:', err);
+  if (ctx) {
+    ctx.reply('❌ Сталася помилка. Спробуй ще раз.');
+  }
+});
+
+// =====================
+// COMMANDS
+// =====================
 bot.command('bot', showMenu);
 
-// кнопки
+// =====================
+// BUTTONS (ACTIONS)
+// =====================
 bot.action('EXPLOSION', explosionHandler);
 bot.action('CURRENCY', currencyHandler);
 bot.action('DOTA', dotaHandler);
 bot.action('MEGUMIN', meguminHandler);
+
+// =====================
+// UNKNOWN CALLBACKS SAFETY
+// =====================
+bot.on('callback_query', async (ctx, next) => {
+  try {
+    return next();
+  } catch (err) {
+    console.error('Callback error:', err);
+    await ctx.answerCbQuery('⚠️ Щось пішло не так');
+  }
+});
 
 module.exports = { bot };

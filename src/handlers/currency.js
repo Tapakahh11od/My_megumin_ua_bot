@@ -4,7 +4,9 @@ const currencyHandler = async (ctx) => {
   await ctx.answerCbQuery();
 
   try {
-    const res = await axios.get('https://api.monobank.ua/bank/currency');
+    const res = await axios.get('https://api.monobank.ua/bank/currency', {
+      timeout: 5000,
+    });
 
     const usd = res.data.find(
       (c) => c.currencyCodeA === 840 && c.currencyCodeB === 980
@@ -14,11 +16,22 @@ const currencyHandler = async (ctx) => {
       (c) => c.currencyCodeA === 978 && c.currencyCodeB === 980
     );
 
+    if (!usd || !eur) {
+      return ctx.reply('⚠️ Дані по валюті тимчасово недоступні');
+    }
+
+    const usdBuy = usd.rateBuy ?? '—';
+    const usdSell = usd.rateSell ?? '—';
+    const eurBuy = eur.rateBuy ?? '—';
+    const eurSell = eur.rateSell ?? '—';
+
     await ctx.reply(
-      `💵 USD: ${usd.rateBuy} / ${usd.rateSell}\n💶 EUR: ${eur.rateBuy} / ${eur.rateSell}`
+      `💵 USD: ${usdBuy} / ${usdSell}\n💶 EUR: ${eurBuy} / ${eurSell}`
     );
+
   } catch (e) {
-    await ctx.reply('Помилка отримання курсу 😢');
+    console.error('Currency error:', e.message);
+    await ctx.reply('❌ Помилка отримання курсу валют');
   }
 };
 

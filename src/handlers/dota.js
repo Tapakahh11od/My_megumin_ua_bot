@@ -1,20 +1,21 @@
-const fs = require('fs');
-const path = require('path');
-
-const playersPath = path.join(__dirname, '../data/players.json');
-
 const dotaHandler = async (ctx) => {
-  await ctx.answerCbQuery();
+  try {
+    await ctx.answerCbQuery();
 
-  const data = JSON.parse(fs.readFileSync(playersPath));
+    await ctx.reply(
+      `🎮 Dota 2 статистика\n\n` +
+      `⚠️ Цей розділ тимчасово вимкнено.\n` +
+      `💡 Ми працюємо над інтеграцією реальної статистики.\n\n` +
+      `🚀 Скоро буде:\n` +
+      `• профілі гравців\n` +
+      `• матчі\n` +
+      `• MMR статистика`
+    );
 
-  let message = '🎮 Dota 2 гравці:\n\n';
-
-  data.players.forEach((p) => {
-    message += `${p.name} → ID: ${p.playersid}\n`;
-  });
-
-  await ctx.reply(message);
+  } catch (err) {
+    console.error('Dota handler error:', err);
+    await ctx.reply('❌ Помилка в Dota розділі');
+  }
 };
 
 module.exports = { dotaHandler };

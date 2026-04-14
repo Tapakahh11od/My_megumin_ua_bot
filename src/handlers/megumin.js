@@ -2,18 +2,28 @@ const fs = require('fs');
 const path = require('path');
 
 const infoPath = path.join(__dirname, '../data/info_bot.json');
-const gifPath = path.join(__dirname, '../../gif/megumin.gif');
+
+const videoPath = path.join(__dirname, '../../gif/info_bot.mp4');
 
 const meguminHandler = async (ctx) => {
-  await ctx.answerCbQuery();
+  try {
+    await ctx.answerCbQuery();
 
-  const data = JSON.parse(fs.readFileSync(infoPath));
+    const data = JSON.parse(fs.readFileSync(infoPath));
 
-  await ctx.reply(data.about);
+    // 🧙 текст про Мегумін
+    await ctx.reply(data.about);
 
-  await ctx.replyWithAnimation({
-    source: gifPath,
-  });
+    // 🎬 відео
+    await ctx.replyWithVideo({
+      source: videoPath,
+      caption: '🧙‍♀️ Megumin — Explosion Arch Wizard',
+    });
+
+  } catch (err) {
+    console.error('Megumin handler error:', err);
+    await ctx.reply('❌ Помилка в інформації про Мегумін');
+  }
 };
 
 module.exports = { meguminHandler };
