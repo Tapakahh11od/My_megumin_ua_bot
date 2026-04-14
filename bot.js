@@ -75,21 +75,30 @@ bot.on('callback_query', async (cb) => {
 
     try {
         // 🎮 НОВА ЛОГІКА DOTA (спрощена)
-        if (cb.data.startsWith('dota_player:')) {
-            const playerId = cb.data.split(':')[1];
-
-            const result = await dota.getPlayerInfo(playerId);
-
-            if (result.photo) {
-                await bot.sendPhoto(chatId, result.photo, {
-                    caption: result.text
-                });
-            } else {
-                await bot.sendMessage(chatId, result.text);
-            }
-
-            return;
+// 🎮 НОВА ЛОГІКА DOTA (спрощена)
+if (cb.data.startsWith('dota_player:')) {
+    const playerId = cb.data.split(':')[1];
+    
+    try {
+        const result = await dota.getPlayerInfo(playerId);
+        
+        if (result.photo) {
+            await bot.sendPhoto(chatId, result.photo, {
+                caption: result.text
+            });
+        } else {
+            await bot.sendMessage(chatId, result.text);
         }
+    } catch (err) {
+        console.error('❌ Dota error:', err.message);
+        let errorMsg = '❌ Помилка отримання даних';
+        if (err.message?.includes('404')) {
+            errorMsg = '❌ Профіль не знайдено або приватний';
+        }
+        await bot.sendMessage(chatId, errorMsg);
+    }
+    return;
+}
 
         // 📋 Інші команди без змін
         switch (cb.data) {
