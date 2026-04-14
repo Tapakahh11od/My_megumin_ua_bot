@@ -4,16 +4,18 @@ const { startBirthdayScheduler } = require('./scheduler/birthdayScheduler');
 
 (async () => {
   try {
-    // 🔥 ЖОРСТКИЙ ресет
-    await bot.telegram.deleteWebhook();
-    await bot.telegram.getUpdates({ offset: -1 });
+    console.log('Starting bot...');
+
+    // 🔥 ЖОРСТКИЙ RESET TELEGRAM СЕСІЙ
+    await bot.telegram.deleteWebhook({ drop_pending_updates: true });
 
     await bot.launch();
+
     console.log('Bot started');
 
     startBirthdayScheduler(bot);
-  } catch (e) {
-    console.error(e);
+  } catch (err) {
+    console.error('ERROR:', err);
   }
 })();
 
