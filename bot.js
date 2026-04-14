@@ -1,159 +1,196 @@
-const https = require('https');
+const TelegramBot = require('node-telegram-bot-api');
+const http = require('http');
+const fs = require('fs');
+const cron = require('node-cron');
+const logger = require('./utils/logger');
+const dota = require('./dota.js');
 
-// 🧠 CACHE
-const cache = new Map();
-const CACHE_TTL = 60 * 1000; // 1 хв
+// ================= DEBUG START =================
+console.log('🚀 BOT STARTING...');
 
-let PLAYERS = [];
+// 🔐 ENV
+const BOT_TOKEN = process.env.BOT_TOKEN;
+const ADMIN_CHAT_ID = parseInt(process.env.ADMIN_CHAT_ID, 10);
 
-// ================= LOAD PLAYERS =================
-function loadPlayers() {
-    const fs = require('fs');
-    const path = require('path');
+console.log({
+    BOT_TOKEN: !!BOT_TOKEN,
+    ADMIN_CHAT_ID
+});
 
-    try {
-        const data = JSON.parse(
-            fs.readFileSync(path.join(__dirname, 'players.json'), 'utf8')
-        );
-        PLAYERS = data.players || [];
-    } catch (err) {
-        console.error('❌ Failed to load players:', err.message);
-    }
+// ❗ BOT TOKEN ОБОВʼЯЗКОВИЙ
+if (!BOT_TOKEN) {
+    logger.error('❌ BOT_TOKEN not set');
+    process.exit(1);
 }
 
-// ================= HTTP =================
-function api(url) {
-    return new Promise((resolve, reject) => {
-        const req = https.get(url, { timeout: 5000 }, res => {
-            let data = '';
-
-            res.on('data', c => data += c);
-
-            res.on('end', () => {
-                try {
-                    resolve(JSON.parse(data));
-                } catch {
-                    reject(new Error('Bad JSON'));
-                }
-            });
-        });
-
-        req.on('timeout', () => {
-            req.destroy();
-            reject(new Error('Timeout'));
-        });
-
-        req.on('error', reject);
-    });
+// ⚠️ ADMIN НЕ ОБОВʼЯЗКОВИЙ
+if (isNaN(ADMIN_CHAT_ID)) {
+    logger.warn('⚠️ ADMIN_CHAT_ID не заданий (birthday вимкнено)');
 }
 
-// ================= MAIN =================
-async function getPlayerInfo(playerId) {
-    const player = PLAYERS.find(p => String(p.id) === String(playerId));
-    if (!player) throw new Error('Player not found');
+// ================= MODULES =================
+const birthdays = require('./birthdays.js');
 
-    const cached = cache.get(playerId);
-    if (cached && Date.now() - cached.time < CACHE_TTL) {
-        return cached.data;
-    }
-
-    const accountId = player.steamId64;
-
-    try {
-        // ⚡ SAFE PARALLEL REQUESTS
-        const [profile, wl, heroes, recent] = await Promise.allSettled([
-            api(`https://api.opendota.com/api/players/${accountId}`),
-            api(`https://api.opendota.com/api/players/${accountId}/wl`),
-            api(`https://api.opendota.com/api/players/${accountId}/heroes`),
-            api(`https://api.opendota.com/api/players/${accountId}/recentMatches`)
-        ]);
-
-        // 🧠 SAFE DATA
-        const profileData = profile.status === 'fulfilled' ? profile.value : {};
-        const wlData = wl.status === 'fulfilled' ? wl.value : { win: 0, lose: 0 };
-        const heroesData = heroes.status === 'fulfilled' ? heroes.value : [];
-        const recentData = recent.status === 'fulfilled' ? recent.value : [];
-
-        // 👤 NAME + AVATAR
-        const name = profileData?.profile?.personaname || player.name;
-        const avatar = profileData?.profile?.avatarfull || null;
-
-        // 📊 WIN/LOSS
-        const wins = wlData.win || 0;
-        const losses = wlData.lose || 0;
-        const total = wins + losses;
-        const winrate = total ? ((wins / total) * 100).toFixed(1) : '0.0';
-
-        // 🧙 HEROES (SAFE - NO localized_name)
-        const topHeroes = (heroesData || [])
-            .sort((a, b) => (b.games || 0) - (a.games || 0))
-            .slice(0, 3)
-            .map(h => {
-                const games = h.games || 0;
-                const wr = games ? ((h.win / games) * 100).toFixed(0) : 0;
-                return `• Hero ID ${h.hero_id} — ${wr}% (${games})`;
-            })
-            .join('\n') || '• Немає даних';
-
-        // 🕒 RECENT MATCHES
-        const recentLine = (recentData || [])
-            .slice(0, 5)
-            .map(m => {
-                const win =
-                    (m.player_slot < 128 && m.radiant_win) ||
-                    (m.player_slot >= 128 && !m.radiant_win);
-
-                return win ? 'W' : 'L';
-            })
-            .join(' / ') || 'Немає ігор';
-
-        // 📦 TEXT
-        const text =
-`🎮 *${name}*
-
-🏆 Win/Loss: ${wins} / ${losses}
-📊 Winrate: ${winrate}%
-
-🕒 Recent: ${recentLine}
-
-🧙 Top heroes:
-${topHeroes}`;
-
-        const result = {
-            text,
-            photo: avatar
-        };
-
-        cache.set(playerId, {
-            time: Date.now(),
-            data: result
-        });
-
-        return result;
-
-    } catch (err) {
-        console.error('❌ DOTA FULL ERROR:', err);
-
-        // 🛡 ALWAYS RETURN SOMETHING
-        return {
-            text: `❌ Не вдалося отримати повну статистику\n\nСпробуйте пізніше`,
-            photo: null
-        };
-    }
+// ================= INIT =================
+try {
+    birthdays.loadBirthdays();
+    dota.loadPlayers();
+} catch (err) {
+    logger.error('❌ Init error:', err.message);
 }
 
-// ================= KEYBOARD =================
-function getPlayersKeyboard() {
-    return {
-        inline_keyboard: PLAYERS.map(p => [{
-            text: `👤 ${p.name}`,
-            callback_data: `dota_player:${p.id}`
-        }])
-    };
-}
-
-module.exports = {
-    loadPlayers,
-    getPlayerInfo,
-    getPlayersKeyboard
+// ================= BOT INFO =================
+let botInfo = {
+    about: '🤖 Bot працює'
 };
+
+try {
+    const raw = fs.readFileSync('info_bot.json', 'utf8');
+    const parsed = JSON.parse(raw);
+
+    if (parsed.about) {
+        botInfo = parsed;
+    }
+
+    logger.info('✅ info_bot.json loaded');
+
+} catch (err) {
+    logger.warn('⚠️ info_bot.json не знайдено або битий');
+}
+
+// ================= BOT INIT =================
+const bot = new TelegramBot(BOT_TOKEN, { polling: true });
+
+bot.deleteWebHook().catch(() => {});
+
+// ================= MENU =================
+const mainMenu = {
+    inline_keyboard: [
+        [{ text: '💥 Explosion!', callback_data: 'explosion' }],
+        [{ text: '💱 Курс валют', callback_data: 'currency' }],
+        [{ text: '🎮 Dota 2 статистика', callback_data: 'dota_menu' }],
+        [{ text: '🧙‍♀️ Про Мегумін', callback_data: 'about' }]
+    ]
+};
+
+// ================= COMMANDS =================
+bot.onText(/\/start/, msg => {
+    bot.sendMessage(msg.chat.id, '🧙‍♀️ Привіт!\nНатисни /bot');
+});
+
+bot.onText(/\/bot/, msg => {
+    bot.sendMessage(msg.chat.id, '📋 Меню:', { reply_markup: mainMenu });
+});
+
+// ================= CALLBACK =================
+const callbackHandlers = require('./handlers/callbackHandlers');
+
+bot.on('callback_query', async (cb) => {
+    const chatId = cb.message.chat.id;
+    const data = cb.data;
+
+    await bot.answerCallbackQuery(cb.id);
+
+    try {
+        // 🎮 DOTA
+        if (data.startsWith('dota_player:')) {
+            const playerId = data.split(':')[1];
+
+            const loadingMsg = await bot.sendMessage(chatId, '⏳ Завантажую статистику...');
+
+            try {
+                const result = await dota.getPlayerInfo(playerId);
+
+                await bot.deleteMessage(chatId, loadingMsg.message_id).catch(() => {});
+
+                if (result.photo) {
+                    await bot.sendPhoto(chatId, result.photo, {
+                        caption: result.text,
+                        parse_mode: 'Markdown'
+                    });
+                } else {
+                    await bot.sendMessage(chatId, result.text, {
+                        parse_mode: 'Markdown'
+                    });
+                }
+
+            } catch (err) {
+                await bot.deleteMessage(chatId, loadingMsg.message_id).catch(() => {});
+
+                logger.error(`❌ Dota error: ${err.message}`);
+
+                await bot.sendMessage(chatId, '❌ Помилка отримання даних');
+            }
+
+            return;
+        }
+
+        // 📋 ІНШЕ
+        switch (data) {
+            case 'explosion':
+                await callbackHandlers.handleExplosion(bot, chatId);
+                break;
+
+            case 'currency':
+                await callbackHandlers.handleCurrency(bot, chatId);
+                break;
+
+            case 'about':
+                await callbackHandlers.handleAbout(bot, chatId, botInfo);
+                break;
+
+            case 'dota_menu':
+                await callbackHandlers.handleDotaMenu(bot, chatId);
+                break;
+
+            default:
+                logger.warn(`⚠️ Unknown callback: ${data}`);
+        }
+
+    } catch (err) {
+        logger.error(`❌ Callback error: ${err.message}`);
+
+        await bot.sendMessage(chatId, '❌ Внутрішня помилка').catch(() => {});
+    }
+});
+
+// ================= CRON =================
+cron.schedule('0 12 * * *', () => {
+
+    logger.info('🔍 Checking birthdays...');
+
+    if (!ADMIN_CHAT_ID) return;
+
+    try {
+        const today = birthdays.getTodayBirthdays();
+
+        if (today.length > 0) {
+            const names = today.map(p => p.name);
+
+            birthdays.sendBirthdayGreeting(bot, ADMIN_CHAT_ID, names);
+
+            logger.info(`🎉 Birthday greetings sent: ${names.join(', ')}`);
+        }
+
+    } catch (err) {
+        logger.error('❌ Birthday error:', err.message);
+    }
+
+}, {
+    timezone: 'Europe/Kyiv'
+});
+
+// ================= SERVER =================
+http.createServer((_, res) => res.end('OK')).listen(process.env.PORT || 3000);
+
+// ================= ERRORS =================
+process.on('unhandledRejection', (reason) => {
+    logger.error(`❌ Unhandled Rejection: ${reason}`);
+});
+
+process.on('uncaughtException', (err) => {
+    logger.error(`❌ Uncaught Exception: ${err.message}`);
+    // ❗ НЕ ВБИВАЄМО ПРОЦЕС (щоб Render не рестартував)
+});
+
+logger.info('✅ Bot started');
