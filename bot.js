@@ -1,7 +1,6 @@
 const TelegramBot = require('node-telegram-bot-api');
 const http = require('http');
 const fs = require('fs');
-const path = require('path');
 const cron = require('node-cron');
 const logger = require('./utils/logger');
 const dota = require('./dota.js');
@@ -22,21 +21,17 @@ if (isNaN(ADMIN_CHAT_ID)) {
 
 // 📦 MODULES
 const birthdays = require('./birthdays.js');
-const { getCurrency } = require('./currency.js');
 
-// 🔄 INIT DATA
+// 🔄 INIT
 birthdays.loadBirthdays();
 dota.loadPlayers();
 
 // 📖 BOT INFO
 let botInfo;
 try {
-    const rawData = fs.readFileSync('info_bot.json', 'utf8');
-    botInfo = JSON.parse(rawData);
+    botInfo = JSON.parse(fs.readFileSync('info_bot.json', 'utf8'));
 
-    if (!botInfo.about) {
-        throw new Error('Missing "about" field');
-    }
+    if (!botInfo.about) throw new Error('Missing "about" field');
 
     logger.info('✅ info_bot.json loaded');
 } catch (err) {
@@ -72,17 +67,24 @@ const callbackHandlers = require('./handlers/callbackHandlers');
 
 bot.on('callback_query', async (cb) => {
     const chatId = cb.message.chat.id;
+    const data = cb.data;
+
     await bot.answerCallbackQuery(cb.id);
 
     try {
-        // 🎮 DOTA PLAYER STATS (СПРОЩЕНО)
-        if (cb.data.startsWith('dota_player:')) {
-            const playerId = cb.data.split(':')[1];
+
+        // ⚡ DOTA PLAYER
+        if (data.startsWith('dota_player:')) {
+            const playerId = data.split(':')[1];
+
+            // ⏳ UX LOADING
+            const loadingMsg = await bot.sendMessage(chatId, '⏳ Завантажую статистику...');
 
             try {
                 const result = await dota.getPlayerInfo(playerId);
 
-                // 👉 ТУТ ВСЯ ЛОГІКА ВИВОДУ
+                await bot.deleteMessage(chatId, loadingMsg.message_id).catch(() => {});
+
                 if (result.photo) {
                     await bot.sendPhoto(chatId, result.photo, {
                         caption: result.text,
@@ -95,6 +97,8 @@ bot.on('callback_query', async (cb) => {
                 }
 
             } catch (err) {
+                await bot.deleteMessage(chatId, loadingMsg.message_id).catch(() => {});
+
                 logger.error(`❌ Dota error: ${err.message}`);
 
                 let errorMsg = '❌ Помилка отримання даних';
@@ -109,8 +113,9 @@ bot.on('callback_query', async (cb) => {
             return;
         }
 
-        // 📋 Інші команди
-        switch (cb.data) {
+        // 📋 MENU ACTIONS
+        switch (data) {
+
             case 'explosion':
                 await callbackHandlers.handleExplosion(bot, chatId);
                 break;
@@ -128,27 +133,32 @@ bot.on('callback_query', async (cb) => {
                 break;
 
             default:
-                logger.warn(`⚠️ Unknown callback: ${cb.data}`);
+                logger.warn(`⚠️ Unknown callback: ${data}`);
         }
 
     } catch (err) {
         logger.error(`❌ Callback handler error: ${err.message}`);
-        await bot.sendMessage(chatId, '❌ Внутрішня помилка обробки запиту').catch(() => {});
+
+        await bot.sendMessage(
+            chatId,
+            '❌ Внутрішня помилка обробки запиту'
+        ).catch(() => {});
     }
 });
 
-// ================= AUTO TASKS (CRON) =================
+// ================= AUTO TASKS =================
 cron.schedule('0 12 * * *', () => {
-    logger.info('🔍 Checking birthdays...');
 
-    if (!ADMIN_CHAT_ID) return;
+    logger.info('🔍 Checking birthdays...');
 
     const today = birthdays.getTodayBirthdays();
 
     if (today.length > 0) {
         const names = today.map(p => p.name);
+
         birthdays.sendBirthdayGreeting(bot, ADMIN_CHAT_ID, names);
-        logger.info(`🎉 Birthday greetings sent to: ${names.join(', ')}`);
+
+        logger.info(`🎉 Birthday greetings sent: ${names.join(', ')}`);
     }
 
 }, {
@@ -156,12 +166,11 @@ cron.schedule('0 12 * * *', () => {
 });
 
 // ================= SERVER =================
-const PORT = process.env.PORT || 3000;
-http.createServer((_, res) => res.end('OK')).listen(PORT);
+http.createServer((_, res) => res.end('OK')).listen(process.env.PORT || 3000);
 
-// ================= GLOBAL ERROR HANDLERS =================
-process.on('unhandledRejection', (reason, promise) => {
-    logger.error(`❌ Unhandled Rejection at: ${promise}, reason: ${reason}`);
+// ================= ERRORS =================
+process.on('unhandledRejection', (reason) => {
+    logger.error(`❌ Unhandled Rejection: ${reason}`);
 });
 
 process.on('uncaughtException', (err) => {
