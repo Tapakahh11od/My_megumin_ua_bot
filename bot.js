@@ -24,19 +24,9 @@ if (isNaN(ADMIN_CHAT_ID)) {
 const birthdays = require('./birthdays.js');
 const { getCurrency } = require('./currency.js');
 
-// 🔄 INIT DATA (SAFE)
+// 🔄 INIT DATA
 birthdays.loadBirthdays();
-dota.loadPlayers();
-
-// ⚠️ IMPORTANT: HEROES must finish loading before usage
-(async () => {
-    try {
-        await dota.loadHeroes();
-        logger.info('✅ Heroes loaded');
-    } catch (err) {
-        logger.error(`❌ Failed to load heroes: ${err.message}`);
-    }
-})();
+dota.loadPlayers(); // ✅ залишаємо тільки це (heroes більше не потрібні)
 
 // 📖 BOT INFO
 let botInfo;
@@ -56,7 +46,6 @@ try {
 
 // 🤖 BOT INIT
 const bot = new TelegramBot(BOT_TOKEN, { polling: true });
-bot.deleteWebHook();
 
 // ================= MENU =================
 const mainMenu = {
@@ -85,30 +74,45 @@ bot.on('callback_query', async (cb) => {
     await bot.answerCallbackQuery(cb.id);
 
     try {
-        // 🎮 PLAYER STATS
+        // 🎮 НОВА ЛОГІКА DOTA (спрощена)
         if (cb.data.startsWith('dota_player:')) {
             const playerId = cb.data.split(':')[1];
-            await callbackHandlers.handleDotaPlayer(bot, chatId, playerId);
+
+            const result = await dota.getPlayerInfo(playerId);
+
+            if (result.photo) {
+                await bot.sendPhoto(chatId, result.photo, {
+                    caption: result.text
+                });
+            } else {
+                await bot.sendMessage(chatId, result.text);
+            }
+
             return;
         }
 
-        // 📋 Прості команди
+        // 📋 Інші команди без змін
         switch (cb.data) {
             case 'explosion':
                 await callbackHandlers.handleExplosion(bot, chatId);
                 break;
+
             case 'currency':
                 await callbackHandlers.handleCurrency(bot, chatId);
                 break;
+
             case 'about':
                 await callbackHandlers.handleAbout(bot, chatId, botInfo);
                 break;
+
             case 'dota_menu':
                 await callbackHandlers.handleDotaMenu(bot, chatId);
                 break;
+
             default:
                 logger.warn(`⚠️ Unknown callback: ${cb.data}`);
         }
+
     } catch (err) {
         logger.error(`❌ Callback handler error: ${err.message}`);
         await bot.sendMessage(chatId, '❌ Внутрішня помилка обробки запиту').catch(() => {});
