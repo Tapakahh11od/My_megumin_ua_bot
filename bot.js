@@ -26,7 +26,7 @@ const { getCurrency } = require('./currency.js');
 
 // 🔄 INIT DATA
 birthdays.loadBirthdays();
-dota.loadPlayers(); // ✅ залишаємо тільки це (heroes більше не потрібні)
+dota.loadPlayers();
 
 // 📖 BOT INFO
 let botInfo;
@@ -46,6 +46,7 @@ try {
 
 // 🤖 BOT INIT
 const bot = new TelegramBot(BOT_TOKEN, { polling: true });
+bot.deleteWebHook();
 
 // ================= MENU =================
 const mainMenu = {
@@ -74,54 +75,48 @@ bot.on('callback_query', async (cb) => {
     await bot.answerCallbackQuery(cb.id);
 
     try {
-        // 🎮 НОВА ЛОГІКА DOTA (спрощена)
-// 🎮 НОВА ЛОГІКА DOTA (спрощена)
-if (cb.data.startsWith('dota_player:')) {
-    const playerId = cb.data.split(':')[1];
-    
-    try {
-        const result = await dota.getPlayerInfo(playerId);
-        
-        if (result.photo) {
-            await bot.sendPhoto(chatId, result.photo, {
-                caption: result.text
-            });
-        } else {
-            await bot.sendMessage(chatId, result.text);
+        // 🎮 DOTA PLAYER STATS (спрощена версія)
+        if (cb.data.startsWith('dota_player:')) {
+            const playerId = cb.data.split(':')[1];
+            
+            try {
+                const result = await dota.getPlayerInfo(playerId);
+                
+                if (result.photo) {
+                    await bot.sendPhoto(chatId, result.photo, {
+                        caption: result.text
+                    });
+                } else {
+                    await bot.sendMessage(chatId, result.text);
+                }
+            } catch (err) {
+                logger.error(`❌ Dota error: ${err.message}`);
+                let errorMsg = '❌ Помилка отримання даних';
+                if (err.message?.includes('404')) {
+                    errorMsg = '❌ Профіль не знайдено або приватний';
+                }
+                await bot.sendMessage(chatId, errorMsg);
+            }
+            return;
         }
-    } catch (err) {
-        console.error('❌ Dota error:', err.message);
-        let errorMsg = '❌ Помилка отримання даних';
-        if (err.message?.includes('404')) {
-            errorMsg = '❌ Профіль не знайдено або приватний';
-        }
-        await bot.sendMessage(chatId, errorMsg);
-    }
-    return;
-}
 
-        // 📋 Інші команди без змін
+        // 📋 Інші команди
         switch (cb.data) {
             case 'explosion':
                 await callbackHandlers.handleExplosion(bot, chatId);
                 break;
-
             case 'currency':
                 await callbackHandlers.handleCurrency(bot, chatId);
                 break;
-
             case 'about':
                 await callbackHandlers.handleAbout(bot, chatId, botInfo);
                 break;
-
             case 'dota_menu':
                 await callbackHandlers.handleDotaMenu(bot, chatId);
                 break;
-
             default:
                 logger.warn(`⚠️ Unknown callback: ${cb.data}`);
         }
-
     } catch (err) {
         logger.error(`❌ Callback handler error: ${err.message}`);
         await bot.sendMessage(chatId, '❌ Внутрішня помилка обробки запиту').catch(() => {});
@@ -129,11 +124,10 @@ if (cb.data.startsWith('dota_player:')) {
 });
 
 // ================= AUTO TASKS (CRON) =================
-// 🎂 Щодня о 12:00 за Києвом — дні народження
 cron.schedule('0 12 * * *', () => {
     logger.info('🔍 Checking birthdays...');
     if (!ADMIN_CHAT_ID) return;
-
+    
     const today = birthdays.getTodayBirthdays();
     if (today.length > 0) {
         const names = today.map(p => p.name);
