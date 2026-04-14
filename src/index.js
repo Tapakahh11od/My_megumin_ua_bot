@@ -4,27 +4,25 @@ const { startBirthdayScheduler } = require('./scheduler/birthdayScheduler');
 
 (async () => {
   try {
-    console.log('Starting bot...');
+    console.log('Bot starting...');
 
-    // 🔥 1. Завжди прибираємо webhook
+    // 🔥 гарантія чистого стану
     await bot.telegram.deleteWebhook({ drop_pending_updates: true });
 
-    // 🔥 2. Скидаємо старі апдейти (ВАЖЛИВО ПРОТИ 409)
-    await bot.telegram.getUpdates({ offset: -1 });
+    // 🔥 маленька пауза (дуже важливо для Render)
+    await new Promise(r => setTimeout(r, 1000));
 
-    // 🔥 3. запускаємо бот
     await bot.launch();
 
     console.log('Bot started');
 
-    // 🔥 4. cron (дні народження)
     startBirthdayScheduler(bot);
 
   } catch (err) {
     console.error('FATAL ERROR:', err);
+    process.exit(1);
   }
 })();
 
-// graceful shutdown
 process.once('SIGINT', () => bot.stop('SIGINT'));
 process.once('SIGTERM', () => bot.stop('SIGTERM'));
