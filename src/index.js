@@ -6,16 +6,17 @@ const { startBirthdayScheduler } = require('./scheduler/birthdayScheduler');
   try {
     console.log('Starting bot...');
 
-    // 🔥 ЖОРСТКИЙ RESET TELEGRAM СЕСІЙ
+    // 🔥 повний reset Telegram стану
     await bot.telegram.deleteWebhook({ drop_pending_updates: true });
 
+    // 🔥 НЕМАЄ getUpdates reset (він інколи викликає 409)
     await bot.launch();
 
     console.log('Bot started');
 
     startBirthdayScheduler(bot);
   } catch (err) {
-    console.error('ERROR:', err);
+    console.error('FATAL ERROR:', err);
   }
 })();
 
