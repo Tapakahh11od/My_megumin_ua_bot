@@ -1,17 +1,14 @@
 {
-  "name": "megumin-bot",
+  "name": "my_megumin_ua_bot",
   "version": "1.0.0",
-  "main": "bot.js",
+  "main": "src/index.js",
   "scripts": {
-    "start": "node bot.js",
-    "dev": "node bot.js"
+    "start": "node src/index.js"
   },
   "dependencies": {
-    "node-telegram-bot-api": "^0.61.0",
-    "node-cron": "^3.0.3",
-    "winston": "^3.11.0"
-  },
-  "engines": {
-    "node": ">=18.0.0"
+    "axios": "^1.6.0",
+    "dotenv": "^16.0.0",
+    "node-cron": "^3.0.0",
+    "telegraf": "^4.16.0"
   }
 }
