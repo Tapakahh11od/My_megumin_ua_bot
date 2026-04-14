@@ -15,15 +15,17 @@ let cache = {
 // 💱 Отримання курсу валют
 function getCurrency() {
     const now = Date.now();
-    
+
+    // ♻️ CACHE
     if (cache.data && now - cache.timestamp < CACHE_TTL) {
         logger.info('♻️ Курс взято з кешу');
         return Promise.resolve(cache.data);
     }
 
-    return new Promise(resolve => {
-        const req = https.get(API_URL, { timeout: REQUEST_TIMEOUT }, res => {
+    return new Promise((resolve) => {
+        const req = https.get(API_URL, { timeout: REQUEST_TIMEOUT }, (res) => {
             let data = '';
+
             res.on('data', chunk => data += chunk);
 
             res.on('end', () => {
@@ -31,9 +33,7 @@ function getCurrency() {
                     const parsed = JSON.parse(data);
 
                     if (!Array.isArray(parsed)) {
-                        logger.error(`❌ API повернув не масив: ${typeof parsed}`);
-                        resolve('❌ Тимчасова помилка курсу');
-                        return;
+                        throw new Error('API response is not array');
                     }
 
                     const usd = parsed.find(r =>
@@ -44,28 +44,30 @@ function getCurrency() {
                         r.currencyCodeA === 978 && r.currencyCodeB === 980
                     );
 
-                    let result = '💱 *Курс валюти MonoBank*\n\n';
+                    const format = (cur, label) => {
+                        if (!cur || cur.rateBuy === undefined) {
+                            return `${label}: дані недоступні`;
+                        }
 
-                    if (usd && usd.rateBuy !== undefined) {
-                        result += `🇺🇸 *USD:* ${usd.rateBuy} / ${usd.rateSell}\n`;
-                    } else {
-                        result += `🇺🇸 *USD:* дані недоступні\n`;
-                    }
+                        return `${label}: ${cur.rateBuy} / ${cur.rateSell}`;
+                    };
 
-                    if (eur && eur.rateBuy !== undefined) {
-                        result += `🇪🇺 *EUR:* ${eur.rateBuy} / ${eur.rateSell}\n`;
-                    } else {
-                        result += `🇪🇺 *EUR:* дані недоступні\n`;
-                    }
+                    const result =
+`💱 *Курс валюти MonoBank*
 
-                    result += `\n_Купівля / Продаж_`;
+🇺🇸 *USD:* ${usd?.rateBuy ?? '—'} / ${usd?.rateSell ?? '—'}
+🇪🇺 *EUR:* ${eur?.rateBuy ?? '—'} / ${eur?.rateSell ?? '—'}
 
+_Купівля / Продаж_`;
+
+                    // 🧠 кеш
                     cache.data = result;
                     cache.timestamp = now;
 
                     resolve(result);
+
                 } catch (err) {
-                    logger.error(`❌ Помилка парсингу курсу: ${err.message}`);
+                    logger.error(`❌ Currency parse error: ${err.message}`);
                     resolve('❌ Помилка отримання курсу');
                 }
             });
@@ -73,12 +75,12 @@ function getCurrency() {
 
         req.on('timeout', () => {
             req.destroy();
-            logger.error('⏰ Тайм-аут запиту до банку');
+            logger.error('⏰ Currency request timeout');
             resolve('⏰ Банк не відповідає, спробуйте пізніше');
         });
 
-        req.on('error', err => {
-            logger.error(`❌ Помилка запиту курсу: ${err.message}`);
+        req.on('error', (err) => {
+            logger.error(`❌ Currency request error: ${err.message}`);
             resolve('❌ Не вдалося зв\'язатися з банком');
         });
     });

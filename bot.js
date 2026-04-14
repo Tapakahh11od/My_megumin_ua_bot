@@ -75,28 +75,37 @@ bot.on('callback_query', async (cb) => {
     await bot.answerCallbackQuery(cb.id);
 
     try {
-        // 🎮 DOTA PLAYER STATS (спрощена версія)
+        // 🎮 DOTA PLAYER STATS (СПРОЩЕНО)
         if (cb.data.startsWith('dota_player:')) {
             const playerId = cb.data.split(':')[1];
-            
+
             try {
                 const result = await dota.getPlayerInfo(playerId);
-                
+
+                // 👉 ТУТ ВСЯ ЛОГІКА ВИВОДУ
                 if (result.photo) {
                     await bot.sendPhoto(chatId, result.photo, {
-                        caption: result.text
+                        caption: result.text,
+                        parse_mode: 'Markdown'
                     });
                 } else {
-                    await bot.sendMessage(chatId, result.text);
+                    await bot.sendMessage(chatId, result.text, {
+                        parse_mode: 'Markdown'
+                    });
                 }
+
             } catch (err) {
                 logger.error(`❌ Dota error: ${err.message}`);
+
                 let errorMsg = '❌ Помилка отримання даних';
+
                 if (err.message?.includes('404')) {
                     errorMsg = '❌ Профіль не знайдено або приватний';
                 }
+
                 await bot.sendMessage(chatId, errorMsg);
             }
+
             return;
         }
 
@@ -105,18 +114,23 @@ bot.on('callback_query', async (cb) => {
             case 'explosion':
                 await callbackHandlers.handleExplosion(bot, chatId);
                 break;
+
             case 'currency':
                 await callbackHandlers.handleCurrency(bot, chatId);
                 break;
+
             case 'about':
                 await callbackHandlers.handleAbout(bot, chatId, botInfo);
                 break;
+
             case 'dota_menu':
                 await callbackHandlers.handleDotaMenu(bot, chatId);
                 break;
+
             default:
                 logger.warn(`⚠️ Unknown callback: ${cb.data}`);
         }
+
     } catch (err) {
         logger.error(`❌ Callback handler error: ${err.message}`);
         await bot.sendMessage(chatId, '❌ Внутрішня помилка обробки запиту').catch(() => {});
@@ -126,14 +140,17 @@ bot.on('callback_query', async (cb) => {
 // ================= AUTO TASKS (CRON) =================
 cron.schedule('0 12 * * *', () => {
     logger.info('🔍 Checking birthdays...');
+
     if (!ADMIN_CHAT_ID) return;
-    
+
     const today = birthdays.getTodayBirthdays();
+
     if (today.length > 0) {
         const names = today.map(p => p.name);
         birthdays.sendBirthdayGreeting(bot, ADMIN_CHAT_ID, names);
         logger.info(`🎉 Birthday greetings sent to: ${names.join(', ')}`);
     }
+
 }, {
     timezone: 'Europe/Kyiv'
 });
