@@ -15,10 +15,14 @@ const currencyHandler = async (ctx) => {
     );
 
     await ctx.reply(
-      `💵 USD: ${usd.rateBuy} / ${usd.rateSell}\n💶 EUR: ${eur.rateBuy} / ${eur.rateSell}`
+      `🚀 <b>Космічний курс валют</b> 🛰️\n\n` +
+      `🇺🇸 <b>USD:</b> ${usd.rateBuy} / ${usd.rateSell}\n` +
+      `🇪🇺 <b>EUR:</b> ${eur.rateBuy} / ${eur.rateSell}\n\n` +
+      `<i>🕐 Оновлено: ${new Date().toLocaleTimeString('uk-UA')}</i>`,
+      { parse_mode: 'HTML' }
     );
   } catch (e) {
-    await ctx.reply('❌ Помилка курсу');
+    await ctx.reply('❌ Помилка отримання курсу валют');
   }
 };
 
