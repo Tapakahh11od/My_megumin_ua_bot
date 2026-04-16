@@ -1,84 +1,93 @@
 const axios = require('axios');
 const { Markup } = require('telegraf');
 
-const { players } = require('../data/players.json');
+// Завантажуємо файл і прибираємо можливі проблеми з пробілами
+const rawData = require('../data/players.json');
+const players = rawData.players || rawData["players "] || [];
 
-const getPlayerData = async (accountId) => {
-  try {
-    const [profileRes, matchesRes, wlRes] = await Promise.all([
-      axios.get(`https://api.opendota.com/api/players/${accountId}`),
-      axios.get(`https://api.opendota.com/api/players/${accountId}/recentMatches`),
-      axios.get(`https://api.opendota.com/api/players/${accountId}/wl`)
-    ]);
-
-    const profile = profileRes.data.profile || {};
-    const matches = matchesRes.data?.slice(0, 10) || [];
-    const wl = wlRes.data || {};
-
-    return {
-      name: profile.personaname || 'Unknown',
-      avatar: profile.avatarfull || null,
-      matches,
-      wins: wl.win ?? 0,
-      loses: wl.lose ?? 0
-    };
-
-  } catch (err) {
-    console.error('DOTA API ERROR:', err.message);
-    return null;
-  }
+// Словник героїв для красивого відображення (ID -> Name)
+const HEROES = {
+  1: 'Anti-Mage', 2: 'Axe', 3: 'Bane', 8: 'Juggernaut', 9: 'Mirana',
+  14: 'Pudge', 34: 'Tinker', 35: 'Sniper', 74: 'Invoker', 102: 'Abaddon',
+  119: 'Dark Willow', 123: 'Hoodwink', 136: 'Marci'
 };
 
+const getHeroName = (id) => HEROES[id] || `Hero #${id}`;
+
+// 1. Показати список гравців (кнопка "Dota 2")
 const dotaHandler = async (ctx) => {
-  const buttons = players.map(p =>
-    [Markup.button.callback(p.name, `DOTA_PLAYER_${p.playersid}`)]
-  );
+  await ctx.answerCbQuery();
+  
+  const buttons = players.map(p => [
+    Markup.button.callback(p.name.trim(), `DOTA_PLAYER_${p.playersid.trim()}`)
+  ]);
 
   await ctx.reply(
-    '🎮 Обери гравця:',
-    Markup.inlineKeyboard(buttons)
+    '🎮 <b>Обери гравця для статистики:</b>',
+    { 
+      parse_mode: 'HTML',
+      reply_markup: Markup.inlineKeyboard(buttons) 
+    }
   );
 };
 
+// 2. Обробка вибору конкретного гравця
 const dotaPlayerHandler = async (ctx) => {
-  const accountId = ctx.callbackQuery.data.split('_').pop();
-
+  const accountId = ctx.match[1]; // ID з регулярки
   await ctx.answerCbQuery();
+  await ctx.reply('⏳ Завантаження даних з OpenDota...');
 
-  const data = await getPlayerData(accountId);
+  try {
+    const playerRes = await axios.get(`https://api.opendota.com/api/players/${accountId}`);
+    const matchesRes = await axios.get(`https://api.opendota.com/api/players/${accountId}/recentMatches`);
+    const wlRes = await axios.get(`https://api.opendota.com/api/players/${accountId}/wl`);
 
-  if (!data) {
-    return ctx.reply('❌ Не вдалося отримати дані');
-  }
+    const profile = playerRes.data.profile || {};
+    const matches = matchesRes.data.slice(0, 10);
+    const wl = wlRes.data || {};
 
-  const last10 = (data.matches || []).map(m => {
-    const isWin =
-      (m.player_slot < 128 && m.radiant_win) ||
-      (m.player_slot >= 128 && !m.radiant_win);
+    // Формуємо статистику останніх 10 матчів
+    let history = [];
+    let wins = 0;
+    let losses = 0;
 
-    return isWin ? '✅' : '❌';
-  }).join(' ');
+    matches.forEach(m => {
+      const isRadiant = m.player_slot < 128;
+      const isWin = (isRadiant && m.radiant_win) || (!isRadiant && !m.radiant_win);
+      
+      if (isWin) wins++;
+      else losses++;
 
-  const message = `
-👤 ${data.name}
+      const hero = getHeroName(m.hero_id);
+      const kda = `${m.kills}/${m.deaths}/${m.assists}`;
+      const resIcon = isWin ? '✅' : '❌';
+      history.push(`${resIcon} ${hero} | KDA: ${kda}`);
+    });
 
-🏆 Wins: ${data.wins}
-❌ Loses: ${data.loses}
+    const totalWinRate = Math.round((wins / 10) * 100);
+    const caption = `
+🎮 <b>${profile.personaname || 'Unknown'}</b>
+🏆 Загалом Wins: ${wl.win} | Losses: ${wl.lose}
 
-🕹 Last 10:
-${last10}
+🔥 <b>Останні 10 матчів:</b>
+${history.join('\n')}
+
+📊 Winrate (10 матчів): ${totalWinRate}%
 `;
 
-  if (data.avatar) {
-    await ctx.replyWithPhoto(data.avatar, {
-      caption: message
-    });
-  } else {
-    await ctx.reply(message);
+    if (profile.avatarfull) {
+      await ctx.replyWithPhoto(profile.avatarfull, {
+        caption,
+        parse_mode: 'HTML'
+      });
+    } else {
+      await ctx.reply(caption, { parse_mode: 'HTML' });
+    }
+
+  } catch (error) {
+    console.error('DOTA API ERROR:', error);
+    await ctx.reply('❌ Помилка: Гравець не знайдений або API не відповідає.');
   }
 };
 
-module.exports = {
-  dotaHandler,
-  dotaPlayerHandler
-};
+module.exports = { dotaHandler, dotaPlayerHandler };
