@@ -3,7 +3,7 @@ const { showMenu } = require('./handlers/menu');
 const { explosionHandler } = require('./handlers/explosion');
 const { currencyHandler } = require('./handlers/currency');
 
-// 🔴 ДОДАЙТЕ dotaPlayerHandler
+// 🔴 Імпортуємо ОБИДВА хендлери
 const { dotaHandler, dotaPlayerHandler } = require('./handlers/dota');
 
 const { meguminHandler } = require('./handlers/megumin');
@@ -20,6 +20,7 @@ bot.action('CURRENCY', currencyHandler);
 bot.action('MEGUMIN', meguminHandler);
 bot.action('DOTA', dotaHandler);
 
+// 🔴 ОБОВ'ЯЗКОВО ДОДАЙТЕ ЦЕ:
 bot.action(/^DOTA_PLAYER_(\d+)$/, dotaPlayerHandler);
 
 module.exports = { bot };
